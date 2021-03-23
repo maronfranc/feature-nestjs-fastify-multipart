@@ -29,7 +29,8 @@ export const AnyFilesInterceptor = (
 		public async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
 			const req = context.switchToHttp().getRequest();
 			try {
-				await this.multipart.any()(req);
+				const files = await this.multipart.any()(req);
+				req.files = files;
 			} catch (err) {
 				throw transformException(err);
 			}

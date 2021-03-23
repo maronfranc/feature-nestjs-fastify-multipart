@@ -23,18 +23,14 @@ export const FilesInterceptor = (
 			this.multipart = new MultipartService({
 				...options,
 				...localOptions,
-				limits: {
-					...options?.limits,
-					...localOptions?.limits,
-					files: maxCount,
-				}
 			});
 		}
 
 		public async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
 			const req = context.switchToHttp().getRequest();
 			try {
-				await this.multipart.files(fieldName)(req);
+				const files = await this.multipart.files(fieldName, maxCount)(req);
+				req[fieldName] = files;
 			} catch (err) {
 				throw transformException(err);
 			}

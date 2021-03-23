@@ -8,39 +8,45 @@ export class MultipartService {
 
 	public file(fieldName: string) {
 		return async (req: any) => {
-			await new Promise<void>(async (resolve, reject) => {
+			return new Promise<any[]>(async (resolve, reject) => {
 				const multipart = await req.file(this.options);
 				if (!multipart.fields[fieldName]) {
 					return reject({ message: multipartExceptions.LIMIT_UNEXPECTED_FILE });
 				}
-				if (this.options.dest) {
-					fs.mkdir(this.options.dest, { recursive: true }, (err) => {
-						if (err) {
-							multipart.fields[fieldName].file.destroy();
-							return reject(err);
-						}
-						const filePath = path.join(this.options.dest, multipart.filename);
-						const outStream = fs.createWriteStream(filePath);
-						multipart.file.pipe(outStream);
-						outStream.on('error', (err) => {
-							multipart.file.destroy();
-							return reject(err);
-						});
-						outStream.on('finish', () => {
-							multipart.fields[fieldName].size = outStream.bytesWritten;
-							req[fieldName] = multipart.fields[fieldName];
-							return resolve();
-						});
-					});
+				if (!this.options.dest) {
+					return resolve(multipart.fields[fieldName]);
 				}
+				fs.mkdir(this.options.dest, { recursive: true }, (err) => {
+					if (err) {
+						multipart.fields[fieldName].file.destroy();
+						return reject(err);
+					}
+					const filePath = path.join(this.options.dest, multipart.filename);
+					const outStream = fs.createWriteStream(filePath);
+					multipart.file.pipe(outStream);
+					outStream.on('error', (err) => {
+						multipart.file.destroy();
+						return reject(err);
+					});
+					outStream.on('finish', () => {
+						multipart.fields[fieldName].size = outStream.bytesWritten;
+						return resolve(multipart.fields[fieldName]);
+					});
+				});
 			});
 		}
 	}
 
-	public files(fieldName: string) {
+	public files(fieldName: string, maxCount: number) {
 		return async (req: any) => {
-			await new Promise<void>(async (resolve, reject) => {
-				const filesAsyncGenerator = await req.files(this.options);
+			return new Promise<any[]>(async (resolve, reject) => {
+				const filesAsyncGenerator = await req.files({
+					...this.options,
+					limits: {
+						...this.options?.limits,
+						files: maxCount,
+					}
+				});
 				const data = await filesAsyncGenerator.next();
 				let multipartFiles = data?.value?.fields[fieldName];
 				if (!multipartFiles) {
@@ -48,10 +54,9 @@ export class MultipartService {
 				}
 				multipartFiles = Array.isArray(multipartFiles) ? multipartFiles : [multipartFiles];
 				if (!this.options.dest) {
-					req[fieldName] = multipartFiles;
-					return resolve();
+					return resolve(multipartFiles);
 				}
-				req[fieldName] = [];
+				const files: any = [];
 				for await (const [i, multipart] of multipartFiles.entries()) {
 					fs.mkdir(this.options.dest, { recursive: true },
 						(err) => {
@@ -68,8 +73,8 @@ export class MultipartService {
 							});
 							outStream.on('finish', () => {
 								multipart.size = outStream.bytesWritten;
-								req[fieldName].push(multipart);
-								if (i === multipartFiles.length - 1) return resolve();
+								files.push(multipart);
+								if (i === multipartFiles.length - 1) return resolve(files);
 							});
 						}
 					);
@@ -80,18 +85,16 @@ export class MultipartService {
 
 	public any() {
 		return async (req: any) => {
-			await new Promise<void>(async (resolve, reject) => {
+			return new Promise<any[]>(async (resolve, reject) => {
 				const filesAsyncGenerator = await req.files(this.options);
 				const data = await filesAsyncGenerator.next();
 				const fields = data?.value?.fields;
-				let multipartFiles: any[] = Object.values(fields);
+				let multipartFiles: any = Object.values(fields);
 				multipartFiles = Array.isArray(multipartFiles) ? multipartFiles : [multipartFiles];
 				if (!this.options.dest) {
-					req.files = multipartFiles;
-					return resolve();
+					return resolve(multipartFiles);
 				}
-				const fieldName = 'files';
-				req[fieldName] = [];
+				const files: any = [];
 				for await (const [i, multipart] of multipartFiles.entries()) {
 					fs.mkdir(this.options.dest, { recursive: true },
 						(err) => {
@@ -108,8 +111,8 @@ export class MultipartService {
 							});
 							outStream.on('finish', () => {
 								multipart.size = outStream.bytesWritten;
-								req[fieldName].push(multipart);
-								if (i === multipartFiles.length - 1) return resolve();
+								files.push(multipart);
+								if (i === multipartFiles.length - 1) return resolve(files);
 							});
 						}
 					);

@@ -27,7 +27,8 @@ export const FileInterceptor = (fieldName: string, localOptions?: MultipartOptio
 		public async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
 			const req = context.switchToHttp().getRequest();
 			try {
-				await this.multipart.file(fieldName)(req);
+				const file = await this.multipart.file(fieldName)(req);
+				req[fieldName] = file;
 			} catch (err) {
 				throw transformException(err);
 			}
