@@ -56,10 +56,10 @@ export class MultipartService {
 				if (!this.options.dest) {
 					return resolve(multipartFiles);
 				}
-				const files: any = [];
-				for await (const [i, multipart] of multipartFiles.entries()) {
-					fs.mkdir(this.options.dest, { recursive: true },
-						(err) => {
+				fs.mkdir(this.options.dest, { recursive: true },
+					async (err) => {
+						const files: any = [];
+						for await (const [i, multipart] of multipartFiles.entries()) {
 							if (err) {
 								multipart.file.destroy();
 								return reject(err);
@@ -77,8 +77,8 @@ export class MultipartService {
 								if (i === multipartFiles.length - 1) return resolve(files);
 							});
 						}
-					);
-				}
+					}
+				);
 			});
 		}
 	}
@@ -94,10 +94,10 @@ export class MultipartService {
 				if (!this.options.dest) {
 					return resolve(multipartFiles);
 				}
-				const files: any = [];
-				for await (const [i, multipart] of multipartFiles.entries()) {
-					fs.mkdir(this.options.dest, { recursive: true },
-						(err) => {
+				fs.mkdir(this.options.dest, { recursive: true },
+					async (err) => {
+						const files: any = [];
+						for await (const [i, multipart] of multipartFiles.entries()) {
 							if (err) {
 								multipart.file.destroy();
 								return reject(err);
@@ -115,8 +115,8 @@ export class MultipartService {
 								if (i === multipartFiles.length - 1) return resolve(files);
 							});
 						}
-					);
-				}
+					}
+				);
 			});
 		}
 	}
