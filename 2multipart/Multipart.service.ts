@@ -9,28 +9,28 @@ export class MultipartService {
 	public file(fieldName: string) {
 		return async (req: any) => {
 			return new Promise<any[]>(async (resolve, reject) => {
-				const multipart = await req.file(this.options);
-				if (!multipart.fields[fieldName]) {
+				const multipart = req.body ?? (await req.file(this.options)).fields;
+				if (!multipart[fieldName]) {
 					return reject({ message: multipartExceptions.LIMIT_UNEXPECTED_FILE });
 				}
 				if (!this.options.dest) {
-					return resolve(multipart.fields[fieldName]);
+					return resolve(multipart[fieldName]);
 				}
 				fs.mkdir(this.options.dest, { recursive: true }, (err) => {
 					if (err) {
-						multipart.fields[fieldName].file.destroy();
+						multipart[fieldName].file.destroy();
 						return reject(err);
 					}
-					const filePath = path.join(this.options.dest, multipart.filename);
+					const filePath = path.join(this.options.dest, multipart[fieldName].filename);
 					const outStream = fs.createWriteStream(filePath);
-					multipart.file.pipe(outStream);
+					multipart[fieldName].file.pipe(outStream);
 					outStream.on('error', (err) => {
-						multipart.file.destroy();
+						multipart[fieldName].file.destroy();
 						return reject(err);
 					});
 					outStream.on('finish', () => {
-						multipart.fields[fieldName].size = outStream.bytesWritten;
-						return resolve(multipart.fields[fieldName]);
+						multipart[fieldName].size = outStream.bytesWritten;
+						return resolve(multipart[fieldName]);
 					});
 				});
 			});
@@ -40,15 +40,14 @@ export class MultipartService {
 	public files(fieldName: string, maxCount: number) {
 		return async (req: any) => {
 			return new Promise<any[]>(async (resolve, reject) => {
-				const filesAsyncGenerator = await req.files({
+				const filesPromise = (await req.files({
 					...this.options,
 					limits: {
 						...this.options?.limits,
 						files: maxCount,
 					}
-				});
-				const data = await filesAsyncGenerator.next();
-				let multipartFiles = data?.value?.fields[fieldName];
+				})).next();
+				let multipartFiles = req.body ? req.body[fieldName] : (await filesPromise).value?.fields[fieldName];
 				if (!multipartFiles) {
 					return reject({ message: multipartExceptions.LIMIT_UNEXPECTED_FILE });
 				}
@@ -102,6 +101,7 @@ export class MultipartService {
 								multipart.file.destroy();
 								return reject(err);
 							}
+
 							const filePath = path.join(this.options.dest, multipart.filename);
 							const outStream = fs.createWriteStream(filePath);
 							multipart.file.pipe(outStream);
@@ -120,4 +120,6 @@ export class MultipartService {
 			});
 		}
 	}
+	// chama com writeFile((err) => reject(err), (data) => resolve(data));
+	// private writeFile(onErr, onSuccess) { }
 }
