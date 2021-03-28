@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { MultipartOptions } from "./interfaces/multipart-options.interface";
+import { MultipartOptions, UploadField } from "./interfaces/multipart-options.interface";
 import { multipartExceptions } from "./multipart/multipart.constants";
+import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 
 export class MultipartService {
 	public constructor(private options: MultipartOptions) { }
@@ -16,22 +17,17 @@ export class MultipartService {
 				if (!this.options.dest) {
 					return resolve(multipart[fieldName]);
 				}
-				fs.mkdir(this.options.dest, { recursive: true }, (err) => {
+				fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 					if (err) {
 						multipart[fieldName].file.destroy();
 						return reject(err);
 					}
-					const filePath = path.join(this.options.dest, multipart[fieldName].filename);
-					const outStream = fs.createWriteStream(filePath);
-					multipart[fieldName].file.pipe(outStream);
-					outStream.on('error', (err) => {
-						multipart[fieldName].file.destroy();
+					try {
+						const result = await this.writeFile(multipart[fieldName]);
+						return resolve(result);
+					} catch (err) {
 						return reject(err);
-					});
-					outStream.on('finish', () => {
-						multipart[fieldName].size = outStream.bytesWritten;
-						return resolve(multipart[fieldName]);
-					});
+					}
 				});
 			});
 		}
@@ -40,14 +36,20 @@ export class MultipartService {
 	public files(fieldName: string, maxCount: number) {
 		return async (req: any) => {
 			return new Promise<any[]>(async (resolve, reject) => {
-				const filesPromise = (await req.files({
-					...this.options,
-					limits: {
-						...this.options?.limits,
-						files: maxCount,
-					}
-				})).next();
-				let multipartFiles = req.body ? req.body[fieldName] : (await filesPromise).value?.fields[fieldName];
+				let multipartFiles;
+				if (req.body) {
+					multipartFiles = req.body[fieldName]
+				} else {
+					const filesAsyncGenerator = await req.files({
+						...this.options,
+						limits: {
+							...this.options?.limits,
+							files: maxCount,
+						}
+					});
+					const data = await filesAsyncGenerator.next();
+					multipartFiles = data.value?.fields[fieldName];
+				}
 				if (!multipartFiles) {
 					return reject({ message: multipartExceptions.LIMIT_UNEXPECTED_FILE });
 				}
@@ -55,29 +57,18 @@ export class MultipartService {
 				if (!this.options.dest) {
 					return resolve(multipartFiles);
 				}
-				fs.mkdir(this.options.dest, { recursive: true },
-					async (err) => {
-						const files: any = [];
-						for await (const [i, multipart] of multipartFiles.entries()) {
-							if (err) {
-								multipart.file.destroy();
-								return reject(err);
-							}
-							const filePath = path.join(this.options.dest, multipart.filename);
-							const outStream = fs.createWriteStream(filePath);
-							multipart.file.pipe(outStream);
-							outStream.on('error', (err) => {
-								multipart.file.destroy();
-								return reject(err);
-							});
-							outStream.on('finish', () => {
-								multipart.size = outStream.bytesWritten;
-								files.push(multipart);
-								if (i === multipartFiles.length - 1) return resolve(files);
-							});
-						}
+				fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
+					if (err) {
+						return reject(err);
 					}
-				);
+
+					try {
+						const result = await this.writeFiles(multipartFiles);
+						return resolve(result);
+					} catch (err) {
+						return reject(err);
+					}
+				});
 			});
 		}
 	}
@@ -93,33 +84,115 @@ export class MultipartService {
 				if (!this.options.dest) {
 					return resolve(multipartFiles);
 				}
-				fs.mkdir(this.options.dest, { recursive: true },
-					async (err) => {
-						const files: any = [];
-						for await (const [i, multipart] of multipartFiles.entries()) {
-							if (err) {
-								multipart.file.destroy();
-								return reject(err);
+				fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
+					const files: any = [];
+					const lastIteration = multipartFiles.length - 1;
+					for await (const [ii, multipart] of multipartFiles.entries()) {
+						if (err) {
+							multipart.file.destroy();
+							return reject(err);
+						}
+						try {
+							if (Array.isArray(multipart)) {
+								const result = await this.writeFiles(multipart);
+								files.push(result);
+							} else {
+								const result = await this.writeFile(multipart);
+								files.push(result);
 							}
-
-							const filePath = path.join(this.options.dest, multipart.filename);
-							const outStream = fs.createWriteStream(filePath);
-							multipart.file.pipe(outStream);
-							outStream.on('error', (err) => {
-								multipart.file.destroy();
-								return reject(err);
-							});
-							outStream.on('finish', () => {
-								multipart.size = outStream.bytesWritten;
-								files.push(multipart);
-								if (i === multipartFiles.length - 1) return resolve(files);
-							});
+							if (ii === lastIteration) return resolve(files);
+						} catch (err) {
+							return reject(err);
 						}
 					}
-				);
+				});
 			});
 		}
 	}
-	// chama com writeFile((err) => reject(err), (data) => resolve(data));
-	// private writeFile(onErr, onSuccess) { }
+
+	public fileFields(uploadFields: UploadField[]) {
+		return async (req: any) => {
+			return new Promise(async (resolve, reject) => {
+				const filesAsyncGenerator = await req.files(this.options);
+				const data = await filesAsyncGenerator.next();
+				const multipartFields = data?.value?.fields;
+				const files: any[] = [];
+				const lastIteration = uploadFields.length - 1;
+				try {
+					await new Promise<void>((resolve, reject) => {
+						for (const [ii, field] of uploadFields.entries()) {
+							const multipart = multipartFields[field.name];
+							if (!multipart || multipart.length === 0 || field.maxCount === 0) continue;
+							if (Array.isArray(multipart)) {
+								if (multipart.length === 1 || field.maxCount === 1) {
+									multipartFields[field.name] = multipart[0];
+								} else if (multipart.length > field.maxCount) {
+									multipartFields[field.name] = multipart.slice(0, field.maxCount);
+								}
+							}
+							if (!this.options.dest) {
+								files.push(multipart);
+								if (ii === lastIteration) return resolve();
+								continue;
+							}
+							fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
+								if (err) return reject(err);
+								try {
+									if (Array.isArray(multipart)) {
+										const result = await this.writeFiles(multipart);
+										files.push(result);
+									} else {
+										const result = await this.writeFile(multipart);
+										files.push(result);
+									}
+									if (ii === lastIteration) return resolve();
+								} catch (err) {
+									return reject(err);
+								}
+							});
+						}
+					});
+				} catch (err) {
+					return reject(err);
+				}
+				return resolve(files);
+			});
+		}
+	}
+
+	private async writeFile(multipart: any): Promise<any> {
+		return new Promise((resolve, reject) => {
+			const file = { ...multipart };
+			const filename = multipart.filename
+			file.originalname = filename;
+			file.filename = randomStringGenerator();
+			const filePath = path.join(this.options.dest, file.filename);
+			const outStream = fs.createWriteStream(filePath);
+			file.file.pipe(outStream);
+			outStream.on('error', (err) => {
+				file.file.destroy();
+				return reject(err);
+			});
+			outStream.on('finish', () => {
+				file.size = outStream.bytesWritten;
+				return resolve(file);
+			});
+		});
+	}
+
+	private async writeFiles(multipartFiles: any[]): Promise<any> {
+		return new Promise(async (resolve, reject) => {
+			const files: any = [];
+			const lastIteration = multipartFiles.length - 1;
+			for await (const [i, multipart] of multipartFiles.entries()) {
+				try {
+					const result = await this.writeFile(multipart);
+					files.push(result);
+				} catch (err) {
+					return reject(err);
+				}
+				if (i === lastIteration) return resolve(files);
+			}
+		});
+	}
 }

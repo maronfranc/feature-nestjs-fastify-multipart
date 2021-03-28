@@ -29,8 +29,7 @@ export const FilesInterceptor = (
 		public async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
 			const req = context.switchToHttp().getRequest();
 			try {
-				const files = await this.multipart.files(fieldName, maxCount)(req);
-				req[fieldName] = files;
+				req[fieldName] = await this.multipart.files(fieldName, maxCount)(req);;
 			} catch (err) {
 				throw transformException(err);
 			}

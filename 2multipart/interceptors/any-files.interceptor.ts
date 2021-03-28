@@ -1,11 +1,8 @@
-import * as path from 'path';
-import * as fs from 'fs';
 import { CallHandler, ExecutionContext, Inject, mixin, NestInterceptor, Optional, Type } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { MULTIPART_MODULE_OPTIONS } from '../files.constants';
 import { transformException } from '../multipart/multipart.utils';
 import { MultipartOptions } from '../interfaces/multipart-options.interface';
-import { multipartExceptions } from '../multipart/multipart.constants';
 import { MultipartService } from '../Multipart.service';
 
 export const AnyFilesInterceptor = (
@@ -28,9 +25,9 @@ export const AnyFilesInterceptor = (
 
 		public async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
 			const req = context.switchToHttp().getRequest();
+			const fieldname = 'files';
 			try {
-				const files = await this.multipart.any()(req);
-				req.files = files;
+				req[fieldname] = await this.multipart.any()(req);
 			} catch (err) {
 				throw transformException(err);
 			}
