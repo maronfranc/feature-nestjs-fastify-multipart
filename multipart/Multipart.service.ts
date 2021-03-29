@@ -4,12 +4,32 @@ import { MultipartOptions, UploadField } from "./interfaces/multipart-options.in
 import { multipartExceptions } from "./multipart/multipart.constants";
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 
+interface MultipartFields {
+	[x: string]: MultipartFile;
+}
+
+interface MultipartFile {
+	toBuffer: () => Promise<Buffer>,
+	file: NodeJS.ReadStream,
+	filepath: string,
+	fieldname: string,
+	filename: string,
+	encoding: string,
+	mimetype: string,
+	fields: MultipartFields
+}
+
+interface InterceptorFile extends MultipartFile {
+	originalname: string;
+	size: number;
+}
+
 export class MultipartService {
 	public constructor(private options: MultipartOptions) { }
 
 	public file(fieldName: string) {
-		return async (req: any) => {
-			return new Promise<any[]>(async (resolve, reject) => {
+		return async (req: any): Promise<InterceptorFile> => {
+			return new Promise<InterceptorFile>(async (resolve, reject) => {
 				const multipart = req.body ?? (await req.file(this.options)).fields;
 				if (!multipart[fieldName]) {
 					return reject({ message: multipartExceptions.LIMIT_UNEXPECTED_FILE });
@@ -34,9 +54,9 @@ export class MultipartService {
 	}
 
 	public files(fieldName: string, maxCount: number) {
-		return async (req: any) => {
-			return new Promise<any[]>(async (resolve, reject) => {
-				let multipartFiles;
+		return async (req: any): Promise<InterceptorFile[]> => {
+			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
+				let multipartFiles: InterceptorFile[];
 				if (req.body) {
 					multipartFiles = req.body[fieldName]
 				} else {
@@ -54,14 +74,9 @@ export class MultipartService {
 					return reject({ message: multipartExceptions.LIMIT_UNEXPECTED_FILE });
 				}
 				multipartFiles = Array.isArray(multipartFiles) ? multipartFiles : [multipartFiles];
-				if (!this.options.dest) {
-					return resolve(multipartFiles);
-				}
+				if (!this.options.dest) return resolve(multipartFiles);
 				fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
-					if (err) {
-						return reject(err);
-					}
-
+					if (err) return reject(err);
 					try {
 						const result = await this.writeFiles(multipartFiles);
 						return resolve(result);
@@ -74,18 +89,18 @@ export class MultipartService {
 	}
 
 	public any() {
-		return async (req: any) => {
-			return new Promise<any[]>(async (resolve, reject) => {
-				const filesAsyncGenerator = await req.files(this.options);
-				const data = await filesAsyncGenerator.next();
-				const fields = data?.value?.fields;
-				let multipartFiles: any = Object.values(fields);
-				multipartFiles = Array.isArray(multipartFiles) ? multipartFiles : [multipartFiles];
+		return async (req: any): Promise<InterceptorFile[]> => {
+			const filesAsyncGenerator = await req.files(this.options);
+			const data = await filesAsyncGenerator.next();
+			const fields = data?.value?.fields;
+			const values = Object.values(fields);
+			const multipartFiles: InterceptorFile[] = Array.isArray(values) ? values : [values];
+			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
 				if (!this.options.dest) {
 					return resolve(multipartFiles);
 				}
 				fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
-					const files: any = [];
+					const files: InterceptorFile[] = [];
 					const lastIteration = multipartFiles.length - 1;
 					for await (const [ii, multipart] of multipartFiles.entries()) {
 						if (err) {
@@ -94,13 +109,14 @@ export class MultipartService {
 						}
 						try {
 							if (Array.isArray(multipart)) {
-								const result = await this.writeFiles(multipart);
-								files.push(result);
+								const filesWritten = await this.writeFiles(multipart);
+								files.push(...filesWritten);
+								if (ii === lastIteration) return resolve(files);
 							} else {
-								const result = await this.writeFile(multipart);
-								files.push(result);
+								const fileWritten = await this.writeFile(multipart);
+								files.push(fileWritten);
+								if (ii === lastIteration) return resolve(files);
 							}
-							if (ii === lastIteration) return resolve(files);
 						} catch (err) {
 							return reject(err);
 						}
@@ -111,40 +127,30 @@ export class MultipartService {
 	}
 
 	public fileFields(uploadFields: UploadField[]) {
-		return async (req: any) => {
+		return async (req: any): Promise<any> => {
 			return new Promise(async (resolve, reject) => {
 				const filesAsyncGenerator = await req.files(this.options);
 				const data = await filesAsyncGenerator.next();
 				const multipartFields = data?.value?.fields;
-				const files: any[] = [];
+				const fieldsObject: Record<string, any[]> = Object.create(null);
 				const lastIteration = uploadFields.length - 1;
 				try {
-					await new Promise<void>((resolve, reject) => {
+					await new Promise<void>(async (resolve, reject) => {
 						for (const [ii, field] of uploadFields.entries()) {
-							const multipart = multipartFields[field.name];
-							if (!multipart || multipart.length === 0 || field.maxCount === 0) continue;
-							if (Array.isArray(multipart)) {
-								if (multipart.length === 1 || field.maxCount === 1) {
-									multipartFields[field.name] = multipart[0];
-								} else if (multipart.length > field.maxCount) {
-									multipartFields[field.name] = multipart.slice(0, field.maxCount);
-								}
-							}
+							const fieldFile: InterceptorFile | InterceptorFile[] = multipartFields[field.name];
+							const multipartFiles: InterceptorFile[] = Array.isArray(fieldFile) ? fieldFile : [fieldFile];
+							if (!multipartFiles || field.maxCount === 0) continue;
+							if (multipartFiles.length === 0) continue;
 							if (!this.options.dest) {
-								files.push(multipart);
+								fieldsObject[field.name] = multipartFiles;
 								if (ii === lastIteration) return resolve();
 								continue;
 							}
 							fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 								if (err) return reject(err);
 								try {
-									if (Array.isArray(multipart)) {
-										const result = await this.writeFiles(multipart);
-										files.push(result);
-									} else {
-										const result = await this.writeFile(multipart);
-										files.push(result);
-									}
+									const files = await this.writeFiles(multipartFiles);
+									fieldsObject[field.name] = files;
 									if (ii === lastIteration) return resolve();
 								} catch (err) {
 									return reject(err);
@@ -155,12 +161,12 @@ export class MultipartService {
 				} catch (err) {
 					return reject(err);
 				}
-				return resolve(files);
+				return resolve(fieldsObject);
 			});
 		}
 	}
 
-	private async writeFile(multipart: any): Promise<any> {
+	private async writeFile(multipart: InterceptorFile): Promise<InterceptorFile> {
 		return new Promise((resolve, reject) => {
 			const file = { ...multipart };
 			const filename = multipart.filename
@@ -180,18 +186,18 @@ export class MultipartService {
 		});
 	}
 
-	private async writeFiles(multipartFiles: any[]): Promise<any> {
+	private async writeFiles(multipartFiles: InterceptorFile[]): Promise<InterceptorFile[]> {
 		return new Promise(async (resolve, reject) => {
-			const files: any = [];
+			const files: InterceptorFile[] = [];
 			const lastIteration = multipartFiles.length - 1;
-			for await (const [i, multipart] of multipartFiles.entries()) {
+			for await (const [ii, multipart] of multipartFiles.entries()) {
 				try {
 					const result = await this.writeFile(multipart);
 					files.push(result);
 				} catch (err) {
 					return reject(err);
 				}
-				if (i === lastIteration) return resolve(files);
+				if (ii === lastIteration) return resolve(files);
 			}
 		});
 	}
