@@ -87,9 +87,9 @@ export class MultipartWrapper {
 			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
 				try {
 					const fields = await this.getFilesFields(req, this.options);
-					const multipartFilesValues: (InterceptorFile | InterceptorFile[])[] = Object.values(fields);
+					const multipartFilesValues = Object.values<InterceptorFile | InterceptorFile[]>(fields);
 					if (!this.options.dest) {
-						const flatMultipartFile: InterceptorFile[] = [].concat.apply([], multipartFilesValues);
+						const flatMultipartFile: InterceptorFile[] = [].concat(...multipartFilesValues);
 						return resolve(flatMultipartFile);
 					};
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
@@ -161,7 +161,7 @@ export class MultipartWrapper {
 	private async writeFile(file: InterceptorFile): Promise<InterceptorFile> {
 		return new Promise((resolve, reject) => {
 			const multipartFile = { ...file };
-			const filename = file.filename
+			const filename = multipartFile.filename
 			multipartFile.originalname = filename;
 			multipartFile.filename = randomStringGenerator();
 			const filePath = path.join(this.options.dest, multipartFile.filename);
