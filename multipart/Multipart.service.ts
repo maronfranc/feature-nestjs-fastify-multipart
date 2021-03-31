@@ -52,17 +52,18 @@ export class MultipartWrapper {
 		}
 	}
 
-	public files(fieldname: string, maxCount: number) {
+	public files(fieldname: string, maxCount?: number) {
 		return async (req: any): Promise<InterceptorFile[]> => {
 			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
 				try {
-					const fileFields = await this.getFilesFields(req, {
-						...this.options,
-						limits: {
-							...this.options.limits,
+					const options = { ...this.options };
+					if (maxCount) {
+						options.limits = {
+							...options.limits,
 							files: maxCount
-						}
-					});
+						};
+					}
+					const fileFields = await this.getFilesFields(req, options);
 					const fieldFiles = fileFields[fieldname];
 					const multipartFiles: InterceptorFile[] = Array.isArray(fieldFiles) ? fieldFiles : [fieldFiles];
 					if (!this.options.dest) return resolve(multipartFiles);
@@ -89,7 +90,7 @@ export class MultipartWrapper {
 					const fields = await this.getFilesFields(req, this.options);
 					const multipartFilesValues = Object.values<InterceptorFile | InterceptorFile[]>(fields);
 					if (!this.options.dest) {
-						const flatMultipartFile: InterceptorFile[] = [].concat(...multipartFilesValues);
+						const flatMultipartFile: InterceptorFile[] = ([] as InterceptorFile[]).concat(...multipartFilesValues);
 						return resolve(flatMultipartFile);
 					};
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
