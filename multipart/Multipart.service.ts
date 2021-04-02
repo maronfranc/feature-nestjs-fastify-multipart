@@ -89,23 +89,11 @@ export class MultipartWrapper {
 					};
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
-						const files: InterceptorFile[] = [];
-						const lastIteration = multipartFilesValues.length - 1;
-						// TODO: loop on flatFiles
-						for (const [ii, multipart] of multipartFilesValues.entries()) {
-							try {
-								if (Array.isArray(multipart)) {
-									const filesWritten = await this.writeFiles(multipart);
-									files.push(...filesWritten);
-									if (ii === lastIteration) return resolve(files);
-								} else {
-									const fileWritten = await this.writeFile(multipart);
-									files.push(fileWritten);
-									if (ii === lastIteration) return resolve(files);
-								}
-							} catch (err) {
-								return reject(err);
-							}
+						try {
+							const result = await this.writeFiles(flatMultipartFiles);
+							return resolve(result);
+						} catch (err) {
+							return reject(err);
 						}
 					});
 				} catch (err) {
@@ -201,7 +189,6 @@ export class MultipartWrapper {
 	private async getFileFields(req: any, options: MultipartOptions): Promise<Record<string, InterceptorFile> | undefined> {
 		if (req.body) return req.body;
 		const file = await req.file(options);
-
 		return file.fields;
 	}
 
