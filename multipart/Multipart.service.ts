@@ -54,16 +54,8 @@ export class MultipartWrapper {
 					const fieldFiles = fileFields[fieldname];
 					const multipartFiles: InterceptorFile[] = Array.isArray(fieldFiles) ? fieldFiles : [fieldFiles];
 					if (!this.options.dest) {
-						const files: InterceptorFile[] = [];
-						if (this.options.fileFilter) {
-							for (const multipart of multipartFiles) {
-								this.options.fileFilter(req, multipart, (error, acceptFile) => {
-									if (error) throw error;
-									if (acceptFile) files.push(multipart);
-								});
-							}
-						}
-						return resolve(files);
+						const filteredFiles = this.filterFiles(req, multipartFiles);
+						return resolve(filteredFiles);
 					};
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
@@ -90,15 +82,8 @@ export class MultipartWrapper {
 					const flatMultipartFiles: InterceptorFile[] = ([] as InterceptorFile[]).concat(...multipartFilesValues);
 					if (!this.options.dest) {
 						if (this.options.fileFilter) {
-							const lastIteration = flatMultipartFiles.length;
-							const files: InterceptorFile[] = [];
-							for (const [ii, multipart] of flatMultipartFiles.entries()) {
-								this.options.fileFilter(req, multipart, (error, acceptFile) => {
-									if (error) throw error;
-									if (acceptFile) files.push(multipart);
-									if (ii === lastIteration) return resolve(files);
-								});
-							}
+							const filteredFiles = this.filterFiles(req, flatMultipartFiles);
+							return resolve(filteredFiles);
 						}
 						return resolve(flatMultipartFiles);
 					};
@@ -151,18 +136,9 @@ export class MultipartWrapper {
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue;
 						};
-						console.log(" ----- ----- | dest qq | ----- ----- ");
 						if (!this.options.dest) {
-							const files: InterceptorFile[] = [];
-							if (this.options.fileFilter) {
-								for await (const multipart of multipartFiles) {
-									this.options.fileFilter(req, multipart, (error, acceptFile) => {
-										if (error) throw error;
-										if (acceptFile) files.push(multipart);
-									});
-								}
-							}
-							fieldsObject[field.name] = files;
+							const filteredFiles = this.filterFiles(req, multipartFiles);
+							fieldsObject[field.name] = filteredFiles;
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue;
 						}
@@ -234,5 +210,16 @@ export class MultipartWrapper {
 		const filesAsyncGenerator = await req.files(options);
 		const data = await filesAsyncGenerator.next();
 		return data.value?.fields;
+	}
+
+	private filterFiles(req: any, multipartFiles: InterceptorFile[]): InterceptorFile[] {
+		const files: InterceptorFile[] = [];
+		for (const multipart of multipartFiles) {
+			this.options.fileFilter(req, multipart, (error, acceptFile) => {
+				if (error) throw error;
+				if (acceptFile) files.push(multipart);
+			});
+		}
+		return files;
 	}
 }
