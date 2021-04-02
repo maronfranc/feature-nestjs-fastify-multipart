@@ -150,13 +150,15 @@ export class MultipartWrapper {
 		}
 	}
 
+	// FIXME: salvar com a extensão
 	private async writeFile(file: InterceptorFile): Promise<InterceptorFile> {
 		return new Promise((resolve, reject) => {
 			const multipartFile = { ...file };
-			const filename = multipartFile.filename
+			const filename = multipartFile.filename;
+			const extension = path.extname(filename);
 			multipartFile.originalname = filename;
 			multipartFile.filename = randomStringGenerator();
-			const filePath = path.join(this.options.dest, multipartFile.filename);
+			const filePath = path.join(this.options.dest, multipartFile.filename + extension,);
 			const outStream = fs.createWriteStream(filePath);
 			multipartFile.file.pipe(outStream);
 			outStream.on('error', (err) => {
