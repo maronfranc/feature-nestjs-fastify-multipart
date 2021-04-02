@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { MultipartOptions, UploadField } from "./interfaces/multipart-options.interface";
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import { InterceptorFile } from './interfaces/multipart-file.interface';
+import { multipartExceptions } from './multipart/multipart.constants';
 
 export class MultipartWrapper {
 	public constructor(private options: MultipartOptions) { }
@@ -86,7 +87,6 @@ export class MultipartWrapper {
 					if (this.options.fileFilter) {
 						multipartFiles = this.filterFiles(req, multipartFiles);
 					}
-					// TODO: testar no multer se ele retorna undefined ou []
 					if (multipartFiles.length === 0) return resolve(undefined);
 					if (!this.options.dest) {
 						return resolve(multipartFiles);
@@ -107,13 +107,19 @@ export class MultipartWrapper {
 		}
 	}
 
-	// FIXME: bug quando uploadFIelds tem um .name que não foi informado.
 	public fileFields(uploadFields: UploadField[]) {
 		return async (req: any): Promise<Record<string, InterceptorFile[]>> => {
 			return new Promise(async (resolve, reject) => {
 				try {
 					const multipartFields = await this.getFilesFields(req, this.options);
 					const fieldsObject: Record<string, InterceptorFile[]> = Object.create(null);
+					const multipartFieldKeys = Object.keys(multipartFields);
+					const uploadFieldKeys = uploadFields.map((uploadField) => uploadField.name);
+					for (const multipartFieldKey of multipartFieldKeys) {
+						if (!uploadFieldKeys.includes(multipartFieldKey)) return reject({
+							message: multipartExceptions.LIMIT_UNEXPECTED_FILE
+						});
+					}
 					const lastIteration = uploadFields.length - 1;
 					let filesTotal = 0;
 					let filesWritten = 0;
