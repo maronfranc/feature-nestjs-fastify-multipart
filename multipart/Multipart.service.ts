@@ -26,12 +26,8 @@ export class MultipartWrapper {
 							fieldFile.file.destroy();
 							return reject(err);
 						}
-						try {
-							const result = await this.writeFile(fieldFile);
-							return resolve(result);
-						} catch (err) {
-							return reject(err);
-						}
+						const result = await this.writeFile(fieldFile);
+						return resolve(result);
 					});
 				} catch (err) {
 					return reject(err);
@@ -63,12 +59,8 @@ export class MultipartWrapper {
 					};
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
-						try {
-							const result = await this.writeFiles(multipartFiles);
-							return resolve(result);
-						} catch (err) {
-							return reject(err);
-						}
+						const result = await this.writeFiles(multipartFiles);
+						return resolve(result);
 					});
 				} catch (err) {
 					return reject(err);
@@ -88,17 +80,11 @@ export class MultipartWrapper {
 						multipartFiles = this.filterFiles(req, multipartFiles);
 					}
 					if (multipartFiles.length === 0) return resolve(undefined);
-					if (!this.options.dest) {
-						return resolve(multipartFiles);
-					};
+					if (!this.options.dest) return resolve(multipartFiles);
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
-						try {
-							const result = await this.writeFiles(multipartFiles);
-							return resolve(result);
-						} catch (err) {
-							return reject(err);
-						}
+						const result = await this.writeFiles(multipartFiles);
+						return resolve(result);
 					});
 				} catch (err) {
 					return reject(err);
