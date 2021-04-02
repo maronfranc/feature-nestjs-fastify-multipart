@@ -52,10 +52,13 @@ export class MultipartWrapper {
 					}
 					const fileFields = await this.getFilesFields(req, options);
 					const fieldFiles = fileFields[fieldname];
-					const multipartFiles: InterceptorFile[] = Array.isArray(fieldFiles) ? fieldFiles : [fieldFiles];
+					let multipartFiles: InterceptorFile[] = Array.isArray(fieldFiles) ? fieldFiles : [fieldFiles];
+					if (this.options.fileFilter) {
+						multipartFiles = this.filterFiles(req, multipartFiles);
+					}
+					if (multipartFiles.length === 0) return resolve(undefined);
 					if (!this.options.dest) {
-						const filteredFiles = this.filterFiles(req, multipartFiles);
-						return resolve(filteredFiles);
+						return resolve(multipartFiles);
 					};
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
@@ -79,18 +82,19 @@ export class MultipartWrapper {
 				try {
 					const fields = await this.getFilesFields(req, this.options);
 					const multipartFilesValues = Object.values<InterceptorFile | InterceptorFile[]>(fields);
-					const flatMultipartFiles: InterceptorFile[] = ([] as InterceptorFile[]).concat(...multipartFilesValues);
+					let multipartFiles: InterceptorFile[] = ([] as InterceptorFile[]).concat(...multipartFilesValues);
+					if (this.options.fileFilter) {
+						multipartFiles = this.filterFiles(req, multipartFiles);
+					}
+					// TODO: testar no multer se ele retorna undefined ou []
+					if (multipartFiles.length === 0) return resolve(undefined);
 					if (!this.options.dest) {
-						if (this.options.fileFilter) {
-							const filteredFiles = this.filterFiles(req, flatMultipartFiles);
-							return resolve(filteredFiles);
-						}
-						return resolve(flatMultipartFiles);
+						return resolve(multipartFiles);
 					};
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
 						try {
-							const result = await this.writeFiles(flatMultipartFiles);
+							const result = await this.writeFiles(multipartFiles);
 							return resolve(result);
 						} catch (err) {
 							return reject(err);
@@ -115,18 +119,17 @@ export class MultipartWrapper {
 					let filesWritten = 0;
 					for (const [ii, field] of uploadFields.entries()) {
 						const fieldFile: InterceptorFile | InterceptorFile[] = multipartFields[field.name];
-						if (!fieldFile || field.maxCount === 0) {
-							if (ii === lastIteration) return resolve(fieldsObject);
-							continue;
-						};
-						const multipartFiles: InterceptorFile[] = Array.isArray(fieldFile) ? fieldFile : [fieldFile];
+						if (!fieldFile || field.maxCount === 0) continue;
+						let multipartFiles: InterceptorFile[] = Array.isArray(fieldFile) ? fieldFile : [fieldFile];
+						if (this.options.fileFilter) {
+							multipartFiles = this.filterFiles(req, multipartFiles);
+						}
 						if (multipartFiles.length === 0) {
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue;
 						};
 						if (!this.options.dest) {
-							const filteredFiles = this.filterFiles(req, multipartFiles);
-							fieldsObject[field.name] = filteredFiles;
+							fieldsObject[field.name] = multipartFiles;
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue;
 						}
@@ -150,7 +153,6 @@ export class MultipartWrapper {
 		}
 	}
 
-	// FIXME: salvar com a extensão
 	private async writeFile(file: InterceptorFile): Promise<InterceptorFile> {
 		return new Promise((resolve, reject) => {
 			const multipartFile = { ...file };
@@ -204,8 +206,8 @@ export class MultipartWrapper {
 	private filterFiles(req: any, multipartFiles: InterceptorFile[]): InterceptorFile[] {
 		const files: InterceptorFile[] = [];
 		for (const multipart of multipartFiles) {
-			this.options.fileFilter(req, multipart, (error, acceptFile) => {
-				if (error) throw error;
+			this.options.fileFilter(req, multipart, (err, acceptFile) => {
+				if (err) throw err;
 				if (acceptFile) files.push(multipart);
 			});
 		}
