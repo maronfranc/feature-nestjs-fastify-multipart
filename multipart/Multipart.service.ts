@@ -116,6 +116,11 @@ export class MultipartWrapper {
 						if (this.options.fileFilter) {
 							multipartFiles = this.filterFiles(req, multipartFiles);
 						}
+						if (multipartFiles.length > field.maxCount) {
+							return reject({
+								message: multipartExceptions.LIMIT_UNEXPECTED_FILE
+							});
+						}
 						if (multipartFiles.length === 0) {
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue;
@@ -149,10 +154,10 @@ export class MultipartWrapper {
 		return new Promise((resolve, reject) => {
 			const multipartFile = { ...file };
 			const filename = multipartFile.filename;
-			const extension = path.extname(filename);
+			const extension = path.extname(multipartFile.filename);
 			multipartFile.originalname = filename;
-			multipartFile.filename = randomStringGenerator();
-			const filePath = path.join(this.options.dest, multipartFile.filename + extension,);
+			multipartFile.filename = randomStringGenerator() + extension;
+			const filePath = path.join(this.options.dest, multipartFile.filename);
 			const outStream = fs.createWriteStream(filePath);
 			multipartFile.file.pipe(outStream);
 			outStream.on('error', (err) => {
