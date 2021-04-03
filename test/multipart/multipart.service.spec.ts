@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from "path";
 import { MultipartOptions } from '../../multipart/interfaces/multipart-options.interface';
 import { MultipartWrapper } from '../../multipart/Multipart.service';
-import { Readable, Writable, PassThrough } from 'stream';
+import { Readable, PassThrough } from 'stream';
 import { InterceptorFile } from '../../multipart/interfaces/multipart-file.interface';
 
 const { expect } = chai;
@@ -23,31 +23,64 @@ describe('MultipartWrapper', () => {
 		sinon.restore();
 	});
 
-	describe('writeFile', () => {
-		const fieldname = 'file';
-		let multipartFile: any = {}
-		let req: any = {};
+	const arrayFieldname = 'files';
+	const objectFieldname = 'file';
+	let filesArray: any[] = [];
+	let fileObject: any = {};
+	let multipartFiles: any = {};
+	async function* getMultipartIterator() {
+		while (true) {
+			yield multipartFiles;
+		}
+	}
+	let req: any = {};
+	const mockReadable = new Readable({
+		read(size) {
+			this.push(null);
+		}
+	});
 
-		beforeEach(() => {
-			const mockReadable = new Readable({
-				read(size) {
-					this.push(null);
-				}
-			});
-			multipartFile = {
-				fieldname,
+	beforeEach(() => {
+		filesArray = [
+			{
+				fieldname: arrayFieldname,
 				filename: 'test.png',
 				encoding: '7bit',
 				mimetype: 'image/png',
 				file: mockReadable,
 				fields: {},
-			};
-			multipartFile.fields[fieldname] = multipartFile;
-			req = {
-				file: async (options: MultipartOptions) => multipartFile,
-			};
-		});
+			},
+			{
+				fieldname: arrayFieldname,
+				filename: 'test2.png',
+				encoding: '7bit',
+				mimetype: 'image/png',
+				file: mockReadable,
+				fields: {},
+			}
+		];
+		fileObject = {
+			fieldname: arrayFieldname,
+			filename: 'test3.png',
+			encoding: '7bit',
+			mimetype: 'image/png',
+			file: mockReadable,
+			fields: {},
+		}
+		fileObject.fields[objectFieldname] = fileObject;
+		multipartFiles = {
+			fields: {
+				[arrayFieldname]: filesArray,
+				[objectFieldname]: fileObject
+			},
+		}
+		req = {
+			file: async (options: MultipartOptions) => fileObject,
+			files: async (options: MultipartOptions) => getMultipartIterator(),
+		};
+	});
 
+	describe('writeFile', () => {
 		it('should call fs.createWriteStream() with expected params', async () => {
 			(fs as any).createWriteStream = (path: string) => new PassThrough();
 			const createWriteStreamStub = sinon.spy(fs, 'createWriteStream');
@@ -55,7 +88,7 @@ describe('MultipartWrapper', () => {
 				dest: "upload/test"
 			};
 			const multipart = new MultipartWrapper(options);
-			const file = await (multipart as any).writeFile(multipartFile);
+			const file = await (multipart as any).writeFile(fileObject);
 			expect(createWriteStreamStub.called).to.be.true;
 			const filePath = path.join(options.dest, file.filename);
 			expect(createWriteStreamStub.calledWith(filePath)).to.be.true
@@ -63,75 +96,17 @@ describe('MultipartWrapper', () => {
 	});
 
 	describe('writeFiles', () => {
-		const fieldname = 'files';
-		let multipartFilesMock: any = [];
-		let multipartFiles: any = {};
-		async function* getMultipartIterator() {
-			while (true) {
-				yield multipartFiles;
-			}
-		}
-		let req: any = {};
-
-		beforeEach(() => {
-			multipartFilesMock = [
-				{
-					fieldname,
-					filename: 'test.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				},
-				{
-					fieldname,
-					filename: 'test2.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				}
-			];
-			multipartFiles = {
-				fields: {
-					[fieldname]: multipartFilesMock
-				},
-			}
-			req = {
-				files: async (options: MultipartOptions) => getMultipartIterator(),
-			}
-		});
-
 		it('should call writeFile() with expected params', async () => {
 			const multipart = new MultipartWrapper({});
 			const writeFileStub = sinon.stub(multipart, <any>'writeFile');
-			await (multipart as any).writeFiles(multipartFilesMock);
+			await (multipart as any).writeFiles(filesArray);
 			expect(writeFileStub.called).to.be.true;
-			expect(writeFileStub.getCall(0).args).to.eql([multipartFilesMock[0]]);
-			expect(writeFileStub.getCall(1).args).to.eql([multipartFilesMock[1]]);
+			expect(writeFileStub.getCall(0).args).to.eql([filesArray[0]]);
+			expect(writeFileStub.getCall(1).args).to.eql([filesArray[1]]);
 		});
 	});
 
 	describe('file', () => {
-		const fieldname = 'file';
-		let multipartFile: any = {}
-		let req: any = {};
-
-		beforeEach(() => {
-			multipartFile = {
-				fieldname,
-				filename: 'test.png',
-				encoding: '7bit',
-				mimetype: 'image/png',
-				file: new Readable(),
-				fields: {},
-			};
-			multipartFile.fields[fieldname] = multipartFile;
-			req = {
-				file: async (options: MultipartOptions) => multipartFile,
-			};
-		});
-
 		it('should call file() with expected params', async () => {
 			const fieldName = 'file';
 			const multipart = new MultipartWrapper({});
@@ -153,7 +128,7 @@ describe('MultipartWrapper', () => {
 			}
 			const reqSpy = sinon
 				.stub(req, 'file')
-				.returns(multipartFile);
+				.returns(fileObject);
 			const multipart = new MultipartWrapper(options);
 			await multipart.file(fieldname)(req);
 			expect(reqSpy.called).to.be.true;
@@ -163,7 +138,7 @@ describe('MultipartWrapper', () => {
 		it('should not call writeFile() if dest is undefined', async () => {
 			const multipart = new MultipartWrapper({});
 			const writeFileStub = sinon.stub(multipart, <any>'writeFile');
-			await multipart.file(fieldname)(req);
+			await multipart.file(objectFieldname)(req);
 			expect(writeFileStub.called).to.be.false;
 		});
 
@@ -172,55 +147,16 @@ describe('MultipartWrapper', () => {
 				dest: 'upload/test',
 			}
 			const multipart = new MultipartWrapper(options);
-			const writeFilesStub = sinon.stub(multipart, <any>'writeFile').returns(multipartFile);
-			await multipart.file(fieldname)(req);
+			const writeFilesStub = sinon.stub(multipart, <any>'writeFile').returns(fileObject);
+			await multipart.file(objectFieldname)(req);
 			expect(writeFilesStub.called).to.be.true;
-			expect(writeFilesStub.calledWith(multipartFile.fields[fieldname])).to.be.true;
+			expect(writeFilesStub.calledWith(fileObject.fields[objectFieldname])).to.be.true;
 		});
 
 		// it('should filter files if options.fileFilter() is defined', async () => { })
 	});
 
 	describe('files', () => {
-		const fieldname = 'files';
-		let multipartFilesMock: any = [];
-		let multipartFiles: any = {};
-		async function* getMultipartIterator() {
-			while (true) {
-				yield multipartFiles;
-			}
-		}
-		let req: any = {};
-
-		beforeEach(() => {
-			multipartFilesMock = [
-				{
-					fieldname,
-					filename: 'test.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				},
-				{
-					fieldname,
-					filename: 'test2.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				}
-			];
-			multipartFiles = {
-				fields: {
-					[fieldname]: multipartFilesMock
-				},
-			}
-			req = {
-				files: async (options: MultipartOptions) => getMultipartIterator(),
-			}
-		});
-
 		it('should call files() with expected params', async () => {
 			const fieldName = 'files';
 			const maxCount = 10;
@@ -268,7 +204,7 @@ describe('MultipartWrapper', () => {
 			});
 			const maxCount = 10;
 			const writeFilesStub = sinon.stub(multipart, <any>'writeFiles');
-			await multipart.files(fieldname, maxCount)(req);
+			await multipart.files(arrayFieldname, maxCount)(req);
 			expect(writeFilesStub.called).to.be.false;
 		});
 
@@ -279,63 +215,13 @@ describe('MultipartWrapper', () => {
 			const multipart = new MultipartWrapper(options);
 			const maxCount = 10;
 			const writeFilesStub = sinon.stub(multipart, <any>'writeFiles');
-			await multipart.files(fieldname, maxCount)(req);
+			await multipart.files(arrayFieldname, maxCount)(req);
 			expect(writeFilesStub.called).to.be.true;
-			expect(writeFilesStub.calledWith(multipartFiles.fields[fieldname])).to.be.true;
+			expect(writeFilesStub.calledWith(multipartFiles.fields[arrayFieldname])).to.be.true;
 		});
 	});
 
 	describe('any', () => {
-		const arrayFieldname = 'files';
-		const objectFieldname = 'file';
-		let filesArray: any[] = [];
-		let fileObject: any = {};
-		let multipartFiles: any = {};
-		async function* getMultipartIterator() {
-			while (true) {
-				yield multipartFiles;
-			}
-		}
-		let req: any = {};
-
-		beforeEach(() => {
-			filesArray = [
-				{
-					fieldname: arrayFieldname,
-					filename: 'test.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				},
-				{
-					fieldname: arrayFieldname,
-					filename: 'test2.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				}
-			];
-			fileObject = {
-				fieldname: arrayFieldname,
-				filename: 'test3.png',
-				encoding: '7bit',
-				mimetype: 'image/png',
-				file: new Readable(),
-				fields: {},
-			}
-			fileObject.fields[objectFieldname] = fileObject;
-			multipartFiles = {
-				fields: {
-					[arrayFieldname]: filesArray,
-					[objectFieldname]: fileObject
-				},
-			}
-			req = {
-				files: async (options: MultipartOptions) => getMultipartIterator(),
-			};
-		});
 
 		it('should call req.files() with expected options', async () => {
 			const options: MultipartOptions = {
@@ -379,57 +265,6 @@ describe('MultipartWrapper', () => {
 	});
 
 	describe('fileFields', () => {
-		const arrayFieldname = 'files';
-		const objectFieldname = 'file';
-		let filesArray: any[] = [];
-		let fileObject: any = {};
-		let multipartFiles: any = {};
-		async function* getMultipartIterator() {
-			while (true) {
-				yield multipartFiles;
-			}
-		}
-		let req: any = {};
-
-		beforeEach(() => {
-			filesArray = [
-				{
-					fieldname: arrayFieldname,
-					filename: 'test.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				},
-				{
-					fieldname: arrayFieldname,
-					filename: 'test2.png',
-					encoding: '7bit',
-					mimetype: 'image/png',
-					file: new Readable(),
-					fields: {},
-				}
-			];
-			fileObject = {
-				fieldname: arrayFieldname,
-				filename: 'test5.png',
-				encoding: '7bit',
-				mimetype: 'image/png',
-				file: new Readable(),
-				fields: {},
-			}
-			fileObject.fields[objectFieldname] = fileObject;
-			multipartFiles = {
-				fields: {
-					[arrayFieldname]: filesArray,
-					[objectFieldname]: fileObject
-				},
-			}
-			req = {
-				files: async (options: MultipartOptions) => getMultipartIterator(),
-			};
-		});
-
 		it('should call req.files() with expected options', async () => {
 			const options: MultipartOptions = {
 				limits: {},
@@ -514,57 +349,6 @@ describe('MultipartWrapper', () => {
 	});
 
 	// describe('filterFiles', () => {
-	// 	const arrayFieldname = 'files';
-	// 	const objectFieldname = 'file';
-	// 	let filesArray: any[] = [];
-	// 	let fileObject: any = {};
-	// 	let multipartFiles: any = {};
-	// 	async function* getMultipartIterator() {
-	// 		while (true) {
-	// 			yield multipartFiles;
-	// 		}
-	// 	}
-	// 	let req: any = {};
-
-	// 	beforeEach(() => {
-	// 		filesArray = [
-	// 			{
-	// 				fieldname: arrayFieldname,
-	// 				filename: 'test.png',
-	// 				encoding: '7bit',
-	// 				mimetype: 'image/png',
-	// 				file: new Readable(),
-	// 				fields: {},
-	// 			},
-	// 			{
-	// 				fieldname: arrayFieldname,
-	// 				filename: 'test2.png',
-	// 				encoding: '7bit',
-	// 				mimetype: 'image/png',
-	// 				file: new Readable(),
-	// 				fields: {},
-	// 			}
-	// 		];
-	// 		fileObject = {
-	// 			fieldname: arrayFieldname,
-	// 			filename: 'test5.png',
-	// 			encoding: '7bit',
-	// 			mimetype: 'image/png',
-	// 			file: new Readable(),
-	// 			fields: {},
-	// 		}
-	// 		fileObject.fields[objectFieldname] = fileObject;
-	// 		multipartFiles = {
-	// 			fields: {
-	// 				[arrayFieldname]: filesArray,
-	// 				[objectFieldname]: fileObject
-	// 			},
-	// 		}
-	// 		req = {
-	// 			files: async (options: MultipartOptions) => getMultipartIterator(),
-	// 		};
-	// 	});
-
 	// 	it('should', async () => {
 	// 		const multipart = new MultipartWrapper({});
 	// 		const filterFilesSpy = sinon.spy()
