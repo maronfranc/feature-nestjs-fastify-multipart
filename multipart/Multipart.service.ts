@@ -54,9 +54,7 @@ export class MultipartWrapper {
 						multipartFiles = this.filterFiles(req, multipartFiles);
 					}
 					if (multipartFiles.length === 0) return resolve(undefined);
-					if (!this.options.dest) {
-						return resolve(multipartFiles);
-					};
+					if (!this.options.dest) return resolve(multipartFiles);
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
 						const result = await this.writeFiles(multipartFiles);
@@ -98,7 +96,6 @@ export class MultipartWrapper {
 			return new Promise(async (resolve, reject) => {
 				try {
 					const multipartFields = await this.getFilesFields(req, this.options);
-					const fieldsObject: Record<string, InterceptorFile[]> = Object.create(null);
 					const multipartFieldKeys = Object.keys(multipartFields);
 					const uploadFieldKeys = uploadFields.map((uploadField) => uploadField.name);
 					for (const multipartFieldKey of multipartFieldKeys) {
@@ -107,8 +104,7 @@ export class MultipartWrapper {
 						});
 					}
 					const lastIteration = uploadFields.length - 1;
-					let filesTotal = 0;
-					let filesWritten = 0;
+					let fieldsObject: Record<string, InterceptorFile[]> | undefined = undefined;
 					for (const [ii, field] of uploadFields.entries()) {
 						const fieldFile: InterceptorFile | InterceptorFile[] = multipartFields[field.name];
 						if (!fieldFile || field.maxCount === 0) continue;
@@ -118,7 +114,7 @@ export class MultipartWrapper {
 						}
 						if (multipartFiles.length > field.maxCount) {
 							return reject({
-								message: multipartExceptions.LIMIT_UNEXPECTED_FILE
+								message: multipartExceptions.FST_FILES_LIMIT
 							});
 						}
 						if (multipartFiles.length === 0) {
@@ -126,6 +122,9 @@ export class MultipartWrapper {
 							continue;
 						};
 						if (!this.options.dest) {
+							if (!fieldsObject) {
+								fieldsObject = Object.create(null);
+							}
 							fieldsObject[field.name] = multipartFiles;
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue;
@@ -133,11 +132,12 @@ export class MultipartWrapper {
 						fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 							if (err) return reject(err);
 							try {
-								filesTotal += multipartFiles.length;
 								const files = await this.writeFiles(multipartFiles);
-								filesWritten += files.length;
+								if (!fieldsObject) {
+									fieldsObject = Object.create(null);
+								}
 								fieldsObject[field.name] = files;
-								if (filesWritten === filesTotal) return resolve(fieldsObject);
+								if (ii === lastIteration) return resolve(fieldsObject);
 							} catch (err) {
 								return reject(err);
 							}
@@ -205,7 +205,9 @@ export class MultipartWrapper {
 		for (const multipart of multipartFiles) {
 			this.options.fileFilter(req, multipart, (err, acceptFile) => {
 				if (err) throw err;
-				if (acceptFile) files.push(multipart);
+				if (acceptFile) {
+					files.push(multipart)
+				};
 			});
 		}
 		return files;
