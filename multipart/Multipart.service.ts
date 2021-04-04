@@ -11,22 +11,21 @@ export class MultipartWrapper {
 	public file(fieldname: string) {
 		return async (req: any): Promise<InterceptorFile | undefined> => {
 			return new Promise<InterceptorFile>(async (resolve, reject) => {
-				const fieldFile = await this.getFileFields(req);
-				const multipartFile = fieldFile[fieldname];
-				if (!multipartFile) return resolve(undefined);
-				if (this.options.fileFilter) {
-					this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
-						if (err) return reject(err);
-						if (!acceptFile) return resolve(undefined);
-					});
-				}
-				if (!this.options.dest) return resolve(multipartFile);
 				try {
+					const fieldFile = await this.getFileFields(req);
+					const multipartFile = fieldFile[fieldname];
+					if (!multipartFile) return resolve(undefined);
+					if (this.options.fileFilter) {
+						this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
+							if (err) return reject(err);
+							if (!acceptFile) return resolve(undefined);
+						});
+					}
+					if (!this.options.dest) return resolve(multipartFile);
 					await fs.promises.mkdir(this.options.dest, { recursive: true });
 					const file = await this.writeFile(multipartFile);
 					return resolve(file);
 				} catch (err) {
-					multipartFile.file.destroy();
 					return reject(err);
 				}
 			});
@@ -47,12 +46,12 @@ export class MultipartWrapper {
 					const multipartFileFields = await this.getFilesFields(req, options);
 					const fieldFiles = multipartFileFields[fieldname];
 					let multipartFiles: InterceptorFile[] = Array.isArray(fieldFiles) ? fieldFiles : [fieldFiles];
-					if (this.options.fileFilter) {
+					if (options.fileFilter) {
 						multipartFiles = this.filterFiles(req, multipartFiles);
 					}
 					if (multipartFiles.length === 0) return resolve(undefined);
-					if (!this.options.dest) return resolve(multipartFiles);
-					await fs.promises.mkdir(this.options.dest, { recursive: true });
+					if (!options.dest) return resolve(multipartFiles);
+					await fs.promises.mkdir(options.dest, { recursive: true });
 					const files = await this.writeFiles(multipartFiles);
 					return resolve(files);
 				} catch (err) {
@@ -102,7 +101,10 @@ export class MultipartWrapper {
 					let fieldsObject: Record<string, InterceptorFile[]> | undefined;
 					for (const [ii, field] of uploadFields.entries()) {
 						const fieldFile: InterceptorFile | InterceptorFile[] | undefined = multipartFields[field.name];
-						if (!fieldFile || field.maxCount === 0) continue;
+						if (!fieldFile || field.maxCount === 0) {
+							if (ii === lastIteration) return resolve(fieldsObject);
+							continue
+						};
 						let multipartFiles: InterceptorFile[] = Array.isArray(fieldFile) ? fieldFile : [fieldFile];
 						if (this.options.fileFilter) {
 							multipartFiles = this.filterFiles(req, multipartFiles);
