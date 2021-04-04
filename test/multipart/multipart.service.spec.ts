@@ -12,17 +12,11 @@ import { multipartExceptions } from '../../multipart/multipart/multipart.constan
 describe('MultipartWrapper', () => {
 	before(() => {
 		sinon.createSandbox();
-		(fs as any).mkdir = (path: string, options: any, callback: () => any) => {
-			return callback();
-		}
-		(fs as any).createWriteStream = (path: string) => new PassThrough();
 	});
 	after(() => {
 		sinon.restore();
 	});
 
-	const objectFieldname = 'file';
-	const arrayFieldname = 'files';
 	let fileObject: any = {};
 	let filesArray: any[] = [];
 	let multipartFiles: any = {};
@@ -32,6 +26,8 @@ describe('MultipartWrapper', () => {
 		}
 	}
 	let req: any = {};
+	const objectFieldname = 'single-file-fieldname';
+	const arrayFieldname = 'array-files-fieldname';
 	const mockReadable = new Readable({
 		read(size) {
 			this.push(null);
@@ -39,6 +35,10 @@ describe('MultipartWrapper', () => {
 	});
 
 	beforeEach(() => {
+		(fs as any).mkdir = (path: string, options: any, callback: () => any) => {
+			return callback();
+		}
+		(fs as any).createWriteStream = (path: string) => new PassThrough();
 		filesArray = [
 			{
 				fieldname: arrayFieldname,
@@ -66,6 +66,9 @@ describe('MultipartWrapper', () => {
 			fields: {},
 		}
 		fileObject.fields[objectFieldname] = fileObject;
+		for (const file of filesArray) {
+			file.fields[arrayFieldname] = filesArray;
+		}
 		multipartFiles = {
 			fields: {
 				[arrayFieldname]: filesArray,
@@ -77,81 +80,111 @@ describe('MultipartWrapper', () => {
 			files: async (options: MultipartOptions) => getMultipartIterator(),
 		};
 	});
-
 	describe('writeFile', () => {
 		it('should call fs.createWriteStream() with expected params', async () => {
-			(fs as any).createWriteStream = (path: string) => new PassThrough();
-			const createWriteStreamStub = sinon.spy(fs, 'createWriteStream');
 			const options: MultipartOptions = {
 				dest: "upload/test"
 			};
 			const multipart = new MultipartWrapper(options);
+			const createWriteStreamStub = sinon.spy(fs, 'createWriteStream');
 			const file = await (multipart as any).writeFile(fileObject);
 			expect(createWriteStreamStub.called).to.be.true;
 			const filePath = path.join(options.dest, file.filename);
 			expect(createWriteStreamStub.calledWith(filePath)).to.be.true
 		});
+		it('should add bytesWritten number to file.size', async () => {
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			};
+			const multipart = new MultipartWrapper(options);
+			const bytesWritten = 1234;
+			(fs as any).createWriteStream = (path: string) => {
+				const mockCreateWriteStream = new PassThrough();
+				(mockCreateWriteStream as any).bytesWritten = bytesWritten;
+				return mockCreateWriteStream;
+			};
+			const file = await (multipart as any).writeFile(fileObject);
+			expect(file.size).to.be.equal(bytesWritten);
+		});
+		// it('should emit error', async () => {
+		// 	const bytesWritten = 1234;
+		// 	(fs as any).createWriteStream = (path: string) => {
+		// 		const mockCreateWriteStream = new PassThrough();
+		// 		mockCreateWriteStream.on('end', () => {
+		// 			console.log(" ----- ----- | END | ----- ----- ");
+		// 			mockCreateWriteStream.emit('error');
+		// 		});
+		// 		return mockCreateWriteStream;
+		// 	};
+		// 	const options: MultipartOptions = {
+		// 		dest: "upload/test"
+		// 	};
+		// 	const multipart = new MultipartWrapper(options);
+		// 	// const destroyStub = sinon.stub(fileObject.file, 'destroy'); 
+		// 	const file = await (multipart as any).writeFile(fileObject);
+		// 	// console.log(" ----- ----- | destroyStub | ----- ----- ", typeof destroyStub);
+		// 	// console.log(destroyStub);
+		// 	// console.log(" _____ _____ | destroyStub | _____ _____ ", typeof destroyStub);
+		// 	// expect(destroyStub.called).to.be.true;
+		// });
 	});
-
 	describe('writeFiles', () => {
 		it('should call writeFile() with expected params', async () => {
 			const multipart = new MultipartWrapper({});
-			const writeFileStub = sinon.stub(multipart, <any>'writeFile');
+			const writeFilesStub = sinon.stub(multipart, <any>'writeFile');
 			await (multipart as any).writeFiles(filesArray);
-			expect(writeFileStub.called).to.be.true;
-			expect(writeFileStub.getCall(0).args).to.eql([filesArray[0]]);
-			expect(writeFileStub.getCall(1).args).to.eql([filesArray[1]]);
+			expect(writeFilesStub.called).to.be.true;
+			expect(writeFilesStub.getCall(0).args).to.eql([filesArray[0]]);
+			expect(writeFilesStub.getCall(1).args).to.eql([filesArray[1]]);
 		});
 	});
-
 	describe('file', () => {
-		it('should call file() with expected params', async () => {
-			const fieldName = 'file';
-			const multipart = new MultipartWrapper({});
-			const fileSpy = sinon
-				.stub(multipart, 'file')
-				.returns(async () => new Promise(() => { }));
-			multipart.file(fieldName);
-
-			expect(fileSpy.called).to.be.true;
-			expect(fileSpy.calledWith(fieldName)).to.be.true;
+		it('should call mkdir with expected params', async () => {
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			};
+			const multipart = new MultipartWrapper(options);
+			const fsSpy = sinon.spy(fs, 'mkdir');
+			await multipart.file(objectFieldname)(req);
+			expect(fsSpy.called).to.be.true;
+			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;
 		});
-
+		it('should call file() with expected params', async () => {
+			const multipart = new MultipartWrapper({});
+			const fileSpy = sinon.spy(multipart, 'file');
+			await multipart.file(objectFieldname)(req);
+			expect(fileSpy.called).to.be.true;
+			expect(fileSpy.calledWith(objectFieldname)).to.be.true;
+		});
 		it('should call req.file() with expected params', async () => {
-			const fieldname = 'file';
 			const options: MultipartOptions = {
 				limits: {
 					fieldSize: 10,
 				},
 			}
-			const reqSpy = sinon
-				.stub(req, 'file')
-				.returns(fileObject);
+			const reqSpy = sinon.spy(req, 'file');
 			const multipart = new MultipartWrapper(options);
-			await multipart.file(fieldname)(req);
+			await multipart.file(objectFieldname)(req);
 			expect(reqSpy.called).to.be.true;
 			expect(reqSpy.calledWith(options)).to.be.true;
 		});
-
 		it('should not call writeFile() if dest is undefined', async () => {
 			const multipart = new MultipartWrapper({});
-			const writeFileStub = sinon.stub(multipart, <any>'writeFile');
+			const writeFileSpy = sinon.spy(multipart, <any>'writeFile');
 			await multipart.file(objectFieldname)(req);
-			expect(writeFileStub.called).to.be.false;
+			expect(writeFileSpy.called).to.be.false;
 		});
-
 		it('should call writeFile() with expected params if dest is defined', async () => {
 			const options: MultipartOptions = {
 				dest: 'upload/test',
 			}
 			const multipart = new MultipartWrapper(options);
-			const writeFilesStub = sinon.stub(multipart, <any>'writeFile').returns(fileObject);
+			const writeFilesSpy = sinon.spy(multipart, <any>'writeFile');
 			await multipart.file(objectFieldname)(req);
-			expect(writeFilesStub.called).to.be.true;
-			expect(writeFilesStub.calledWith(fileObject.fields[objectFieldname])).to.be.true;
+			expect(writeFilesSpy.called).to.be.true;
+			expect(writeFilesSpy.calledWith(fileObject.fields[objectFieldname])).to.be.true;
 		});
-
-		it('should return undefined if fileFilter callback is (null, false)', async () => {
+		it('should return undefined if options.fileFilter callback is (null, false)', async () => {
 			const options: MultipartOptions = {
 				fileFilter: (req, file, cb) => cb(null, false)
 			}
@@ -159,8 +192,7 @@ describe('MultipartWrapper', () => {
 			const file = await multipart.file(objectFieldname)(req);
 			expect(file).to.be.undefined;
 		});
-
-		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+		it('should throw error if options.fileFilter callback is (Error, Boolean)', async () => {
 			const errorMessage = 'Expect fileFilter test to throw error';
 			const errorStatus = HttpStatus.BAD_REQUEST;
 			const options: MultipartOptions = {
@@ -170,39 +202,41 @@ describe('MultipartWrapper', () => {
 			try {
 				await multipart.file(objectFieldname)(req);
 			} catch (err) {
-				expect(err.status).to.equal(errorStatus);
-				expect(err.response).to.equal(errorMessage);
 				expect(err instanceof HttpException).to.be.true;
+				expect(err.response).to.equal(errorMessage);
+				expect(err.status).to.equal(errorStatus);
 			}
 		});
 	});
-
 	describe('files', () => {
-		it('should call files() with expected params', async () => {
-			const fieldName = 'files';
-			const maxCount = 10;
-			const multipart = new MultipartWrapper({});
-			const filesStub = sinon
-				.stub(multipart, 'files')
-				.returns(async () => new Promise(() => { }));
-			multipart.files(fieldName, maxCount)({});
-
-			expect(filesStub.called).to.be.true;
-			expect(filesStub.calledWith(fieldName, maxCount)).to.be.true;
+		it('should call mkdir with expected params', async () => {
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			};
+			const multipart = new MultipartWrapper(options);
+			const fsSpy = sinon.spy(fs, 'mkdir');
+			await multipart.file(objectFieldname)(req);
+			expect(fsSpy.called).to.be.true;
+			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;
 		});
-
-		it('should call req.files() with expected options', async () => {
+		it('should call files() with expected params', async () => {
+			const multipart = new MultipartWrapper({});
 			const maxCount = 10;
+			const filesSpy = sinon.spy(multipart, 'files');
+			await multipart.files(arrayFieldname, maxCount)(req);
+			expect(filesSpy.called).to.be.true;
+			expect(filesSpy.calledWith(arrayFieldname, maxCount)).to.be.true;
+		});
+		it('should call req.files() with expected options', async () => {
 			const options: MultipartOptions = {
 				limits: {},
 			}
 			const multipart = new MultipartWrapper(options);
-			const reqStub = sinon
-				.stub(req, 'files');
-			multipart.files(arrayFieldname, maxCount)(req);
-
-			expect(reqStub.called).to.be.true;
-			expect(reqStub.calledWith({
+			const maxCount = 10;
+			const reqSpy = sinon.spy(req, 'files');
+			await multipart.files(arrayFieldname, maxCount)(req);
+			expect(reqSpy.called).to.be.true;
+			expect(reqSpy.calledWith({
 				...options,
 				limits: {
 					...options?.limits,
@@ -210,30 +244,25 @@ describe('MultipartWrapper', () => {
 				}
 			})).to.be.true;
 		});
-
 		it('should not call writeFiles() if dest is undefined', async () => {
 			const multipart = new MultipartWrapper({
 				dest: undefined
 			});
-			const maxCount = 10;
 			const writeFilesStub = sinon.stub(multipart, <any>'writeFiles');
-			await multipart.files(arrayFieldname, maxCount)(req);
+			await multipart.files(arrayFieldname, 10)(req);
 			expect(writeFilesStub.called).to.be.false;
 		});
-
 		it('should call writeFiles() with expected params if dest is defined', async () => {
 			const options: MultipartOptions = {
 				dest: 'upload/test',
 			}
 			const multipart = new MultipartWrapper(options);
-			const maxCount = 10;
 			const writeFilesStub = sinon.stub(multipart, <any>'writeFiles');
-			await multipart.files(arrayFieldname, maxCount)(req);
+			await multipart.files(arrayFieldname, 10)(req);
 			expect(writeFilesStub.called).to.be.true;
 			expect(writeFilesStub.calledWith(multipartFiles.fields[arrayFieldname])).to.be.true;
 		});
-
-		it('should return undefined if fileFilter callback is (null, false)', async () => {
+		it('should return undefined if options.fileFilter callback is (null, false)', async () => {
 			const options: MultipartOptions = {
 				fileFilter: (req, file, cb) => cb(null, false)
 			}
@@ -241,7 +270,6 @@ describe('MultipartWrapper', () => {
 			const files = await multipart.files(arrayFieldname)(req);
 			expect(files).to.be.undefined;
 		});
-
 		it("should omit specific file if callback is (null, false)", async () => {
 			const fileToOmit: InterceptorFile = filesArray[1];
 			const options: MultipartOptions = {
@@ -256,8 +284,7 @@ describe('MultipartWrapper', () => {
 			const files = await multipart.files(arrayFieldname)(req);
 			expect(files).to.not.have.members([fileToOmit]);
 		});
-
-		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+		it('should throw error if options.fileFilter callback is (Error, Boolean)', async () => {
 			const errorMessage = 'Expect fileFilter test to throw error';
 			const errorStatus = HttpStatus.BAD_REQUEST;
 			const options: MultipartOptions = {
@@ -267,55 +294,59 @@ describe('MultipartWrapper', () => {
 			try {
 				await multipart.files(arrayFieldname)(req);
 			} catch (err) {
-				expect(err.status).to.equal(errorStatus);
-				expect(err.response).to.equal(errorMessage);
 				expect(err instanceof HttpException).to.be.true;
+				expect(err.response).to.equal(errorMessage);
+				expect(err.status).to.equal(errorStatus);
 			}
 		});
 	});
-
 	describe('any', () => {
+		it('should call mkdir with expected params', async () => {
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			};
+			const multipart = new MultipartWrapper(options);
+			const fsSpy = sinon.spy(fs, 'mkdir');
+			await multipart.file(objectFieldname)(req);
+			expect(fsSpy.called).to.be.true;
+			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;
+		});
 		it('should call req.files() with expected options', async () => {
 			const options: MultipartOptions = {
 				limits: {},
 			}
 			const multipart = new MultipartWrapper(options);
-			const reqStub = sinon
-				.stub(req, 'files')
-				.returns(getMultipartIterator());
+			const reqSpy = sinon.spy(req, 'files');
 			await multipart.any()(req);
-			expect(reqStub.called).to.be.true;
-			expect(reqStub.calledWith({
+			expect(reqSpy.called).to.be.true;
+			expect(reqSpy.calledWith({
 				...options,
 			})).to.be.true;
 		});
-
 		it('should not call writeFile() nor writeFiles() if dest is undefined', async () => {
 			const multipart = new MultipartWrapper({
 				dest: undefined
 			});
-			const writeFileStub = sinon.stub(multipart, <any>'writeFile');
-			const writeFilesStub = sinon.stub(multipart, <any>'writeFiles');
+			const writeFileSpy = sinon.spy(multipart, <any>'writeFile');
+			const writeFilesSpy = sinon.spy(multipart, <any>'writeFiles');
 			await multipart.any()(req);
-			expect(writeFileStub.called).to.be.false;
-			expect(writeFilesStub.called).to.be.false;
+			expect(writeFileSpy.called).to.be.false;
+			expect(writeFilesSpy.called).to.be.false;
 		});
-
 		it('should call writeFiles() with expected params if dest is defined', async () => {
 			const options: MultipartOptions = {
 				dest: 'upload/test',
 			}
 			const multipart = new MultipartWrapper(options);
-			const writeFilesStub = sinon.stub(multipart, <any>'writeFiles').returns(filesArray);
+			const writeFilesSpy = sinon.spy(multipart, <any>'writeFiles');
 			await multipart.any()(req);
-			expect(writeFilesStub.called).to.be.true;
+			expect(writeFilesSpy.called).to.be.true;
 			const reqFilesData: any = await getMultipartIterator().next();
 			const multipartFilesValues = Object.values<InterceptorFile | InterceptorFile[]>(reqFilesData.value.fields);
 			const flatMultipartFiles: InterceptorFile[] = ([] as InterceptorFile[]).concat(...multipartFilesValues);
-			expect(writeFilesStub.calledWith(flatMultipartFiles)).to.be.true;
+			expect(writeFilesSpy.calledWith(flatMultipartFiles)).to.be.true;
 		});
-
-		it('should return undefined if fileFilter callback is (null, false)', async () => {
+		it('should return undefined if options.fileFilter callback is (null, false)', async () => {
 			const options: MultipartOptions = {
 				fileFilter: (req, file, cb) => cb(null, false)
 			}
@@ -323,7 +354,6 @@ describe('MultipartWrapper', () => {
 			const files = await multipart.any()(req);
 			expect(files).to.be.undefined;
 		});
-
 		it("should omit specific file if callback is (null, false)", async () => {
 			const fileToOmit: InterceptorFile = filesArray[1];
 			const options: MultipartOptions = {
@@ -338,8 +368,7 @@ describe('MultipartWrapper', () => {
 			const files = await multipart.any()(req);
 			expect(files).to.not.have.members([fileToOmit]);
 		});
-
-		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+		it('should throw error if options.fileFilter callback is (Error, Boolean)', async () => {
 			const errorMessage = 'Expect fileFilter test to throw error';
 			const errorStatus = HttpStatus.BAD_REQUEST;
 			const options: MultipartOptions = {
@@ -349,45 +378,50 @@ describe('MultipartWrapper', () => {
 			try {
 				await multipart.any()(req);
 			} catch (err) {
-				expect(err.status).to.equal(errorStatus);
-				expect(err.response).to.equal(errorMessage);
 				expect(err instanceof HttpException).to.be.true;
+				expect(err.response).to.equal(errorMessage);
+				expect(err.status).to.equal(errorStatus);
 			}
 		});
 	});
-
 	describe('fileFields', () => {
+		it('should call mkdir with expected params', async () => {
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			};
+			const multipart = new MultipartWrapper(options);
+			const fsSpy = sinon.spy(fs, 'mkdir');
+			await multipart.file(objectFieldname)(req);
+			expect(fsSpy.called).to.be.true;
+			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;
+		});
 		it('should call req.files() with expected options', async () => {
 			const options: MultipartOptions = {
 				limits: {},
 			}
 			const multipart = new MultipartWrapper(options);
-			const reqStub = sinon
-				.stub(req, 'files')
-				.returns(getMultipartIterator());
+			const reqSpy = sinon.spy(req, 'files');
 			await multipart.fileFields([
 				{ name: arrayFieldname, maxCount: 10 },
 				{ name: objectFieldname, maxCount: 10 },
 			])(req);
-			expect(reqStub.called).to.be.true;
-			expect(reqStub.calledWith({
+			expect(reqSpy.called).to.be.true;
+			expect(reqSpy.calledWith({
 				...options,
 			})).to.be.true;
 		});
-
 		it('should not call writeFiles() if dest is undefined', async () => {
 			const multipart = new MultipartWrapper({
 				dest: undefined
 			});
-			const writeFilesStub = sinon.stub(multipart, <any>'writeFiles').returns(filesArray);
+			const writeFilesSpy = sinon.spy(multipart, <any>'writeFiles');
 			await multipart.fileFields([
 				{ name: arrayFieldname, maxCount: 10 },
 				{ name: objectFieldname, maxCount: 10 },
 			])(req);
-			expect(writeFilesStub.called).to.be.false;
+			expect(writeFilesSpy.called).to.be.false;
 		});
-
-		it('should call writeFiles() with expected params when if is defined', async () => {
+		it('should call writeFiles() with expected params when dest is defined', async () => {
 			const options: MultipartOptions = {
 				dest: 'upload/test',
 			}
@@ -407,8 +441,7 @@ describe('MultipartWrapper', () => {
 			expect(writeFilesStub.getCall(0).calledWith(testFiles)).to.be.true;
 			expect(writeFilesStub.getCall(1).calledWith([fileObject])).to.be.true;
 		});
-
-		it('should return undefined if fileFilter callback is (null, false)', async () => {
+		it('should return undefined if options.fileFilter callback is (null, false)', async () => {
 			const options: MultipartOptions = {
 				fileFilter: (req, file, cb) => cb(null, false)
 			}
@@ -419,12 +452,10 @@ describe('MultipartWrapper', () => {
 			])(req);
 			expect(files).to.be.undefined;
 		});
-
 		it("should omit specific file if callback is (null, false)", async () => {
 			const multipartFiles = await getMultipartIterator().next();
 			const fileToOmitInArray: InterceptorFile = multipartFiles.value.fields[arrayFieldname][1];
 			const fileToOmit: InterceptorFile = multipartFiles.value.fields[objectFieldname];
-			// const fileToOmit: InterceptorFile = filesArray[1];
 			const options: MultipartOptions = {
 				fileFilter: (req, file, cb) => {
 					if (file.filename === fileToOmit.filename || file.filename === fileToOmitInArray.filename) {
@@ -441,8 +472,7 @@ describe('MultipartWrapper', () => {
 			expect(filesRecord[arrayFieldname]).to.not.have.members([fileToOmit]);
 			expect(filesRecord[objectFieldname]).to.be.undefined;
 		});
-
-		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+		it('should throw error if options.fileFilter callback is (Error, Boolean)', async () => {
 			const errorMessage = 'Expect fileFilter test to throw error';
 			const errorStatus = HttpStatus.BAD_REQUEST;
 			const options: MultipartOptions = {
@@ -455,13 +485,12 @@ describe('MultipartWrapper', () => {
 					{ name: objectFieldname, maxCount: 10 },
 				])(req);
 			} catch (err) {
-				expect(err.status).to.equal(errorStatus);
-				expect(err.response).to.equal(errorMessage);
 				expect(err instanceof HttpException).to.be.true;
+				expect(err.response).to.equal(errorMessage);
+				expect(err.status).to.equal(errorStatus);
 			}
 		});
-
-		it('should throw exception if field is missing', async () => {
+		it('should throw exception if field is not listed in UploadField array', async () => {
 			const multipart = new MultipartWrapper({});
 			const differentFieldname = 'different-fieldname';
 			multipartFiles.fields[differentFieldname] = multipartFiles.fields[arrayFieldname];
@@ -475,7 +504,6 @@ describe('MultipartWrapper', () => {
 				expect(err.message).to.equal(multipartExceptions.LIMIT_UNEXPECTED_FILE);
 			}
 		});
-
 		it('should throw exception if files exceed maxCount', async () => {
 			const multipart = new MultipartWrapper({});
 			const reqFilesData: any = await getMultipartIterator().next();
@@ -490,14 +518,79 @@ describe('MultipartWrapper', () => {
 			}
 		});
 	});
-
-	// describe('filterFiles', () => {
-	// 	it('should', async () => {
-	// 		const multipart = new MultipartWrapper({});
-	// 		const filterFilesSpy = sinon.spy()
-	// 		await (multipart as any).filterFiles(req, multipartFiles);
-	// 	});
-	// });
+	describe('getFileFields', () => {
+		it('should get file from body if it is defined', async () => {
+			req.body = {
+				[objectFieldname]: fileObject
+			};
+			const reqFileSpy = sinon.spy(req, 'file');
+			const multipart = new MultipartWrapper({});
+			await (multipart as any).getFileFields(req);
+			expect(reqFileSpy.called).to.be.false;
+		});
+		it('should call req.file() with expected options', async () => {
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			}
+			const multipart = new MultipartWrapper(options);
+			const reqFileSpy = sinon.spy(req, 'file');
+			await (multipart as any).getFileFields(req, options);
+			expect(reqFileSpy.called).to.be.true;
+			expect(reqFileSpy.calledWith(options)).to.be.true;
+		});
+	});
+	describe('getFilesFields', () => {
+		it('should get files from body if it is defined', async () => {
+			req.body = {
+				[arrayFieldname]: filesArray
+			};
+			const reqFilesSpy = sinon.spy(req, 'files');
+			const multipart = new MultipartWrapper({});
+			await (multipart as any).getFilesFields(req);
+			expect(reqFilesSpy.called).to.be.false;
+		});
+		it('should call req.files() with expected options', async () => {
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			}
+			const multipart = new MultipartWrapper(options);
+			const reqFilesSpy = sinon.spy(req, 'files');
+			await (multipart as any).getFilesFields(req);
+			expect(reqFilesSpy.called).to.be.true;
+			expect(reqFilesSpy.calledWith(options)).to.be.true;
+		});
+	});
+	describe('filterFiles', () => {
+		it("should omit specific file if callback is (null, false)", async () => {
+			const fileToOmit: InterceptorFile = filesArray[1];
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => {
+					if (file.filename === fileToOmit.filename) {
+						return cb(null, false);
+					}
+					cb(null, true);
+				}
+			}
+			const multipart = new MultipartWrapper(options);
+			const files = await (multipart as any).filterFiles(req, filesArray);
+			expect(files).to.not.have.members([fileToOmit]);
+		});
+		it('should throw error if options.fileFilter callback is (Error, Boolean)', async () => {
+			const errorMessage = 'Expect fileFilter test to throw error';
+			const errorStatus = HttpStatus.BAD_REQUEST;
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(new HttpException(errorMessage, errorStatus), false)
+			}
+			const multipart = new MultipartWrapper(options);
+			try {
+				await (multipart as any).filterFiles(req, filesArray);
+			} catch (err) {
+				expect(err instanceof HttpException).to.be.true;
+				expect(err.response).to.equal(errorMessage);
+				expect(err.status).to.equal(errorStatus);
+			}
+		});
+	});
 });
 
 
