@@ -11,26 +11,22 @@ export class MultipartWrapper {
 	public file(fieldname: string) {
 		return async (req: any): Promise<InterceptorFile | undefined> => {
 			return new Promise<InterceptorFile>(async (resolve, reject) => {
-				try {
-					const fieldFile = await this.getFileFields(req);
-					const multipartFile = fieldFile[fieldname];
-					if (!multipartFile) return resolve(undefined);
-					if (this.options.fileFilter) {
-						this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
-							if (err) throw err;
-							if (!acceptFile) return resolve(undefined);
-						});
-					}
-					if (!this.options.dest) return resolve(multipartFile);
-					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
-						if (err) {
-							multipartFile.file.destroy();
-							return reject(err);
-						}
-						const file = await this.writeFile(multipartFile);
-						return resolve(file);
+				const fieldFile = await this.getFileFields(req);
+				const multipartFile = fieldFile[fieldname];
+				if (!multipartFile) return resolve(undefined);
+				if (this.options.fileFilter) {
+					this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
+						if (err) return reject(err);
+						if (!acceptFile) return resolve(undefined);
 					});
+				}
+				if (!this.options.dest) return resolve(multipartFile);
+				try {
+					await fs.promises.mkdir(this.options.dest, { recursive: true });
+					const file = await this.writeFile(multipartFile);
+					return resolve(file);
 				} catch (err) {
+					multipartFile.file.destroy();
 					return reject(err);
 				}
 			});
@@ -40,14 +36,14 @@ export class MultipartWrapper {
 	public files(fieldname: string, maxCount?: number) {
 		return async (req: any): Promise<InterceptorFile[] | undefined> => {
 			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
+				const options = { ...this.options };
+				if (maxCount) {
+					options.limits = {
+						...options.limits,
+						files: maxCount
+					};
+				}
 				try {
-					const options = { ...this.options };
-					if (maxCount) {
-						options.limits = {
-							...options.limits,
-							files: maxCount
-						};
-					}
 					const multipartFileFields = await this.getFilesFields(req, options);
 					const fieldFiles = multipartFileFields[fieldname];
 					let multipartFiles: InterceptorFile[] = Array.isArray(fieldFiles) ? fieldFiles : [fieldFiles];
@@ -56,11 +52,9 @@ export class MultipartWrapper {
 					}
 					if (multipartFiles.length === 0) return resolve(undefined);
 					if (!this.options.dest) return resolve(multipartFiles);
-					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
-						if (err) return reject(err);
-						const files = await this.writeFiles(multipartFiles);
-						return resolve(files);
-					});
+					await fs.promises.mkdir(this.options.dest, { recursive: true });
+					const files = await this.writeFiles(multipartFiles);
+					return resolve(files);
 				} catch (err) {
 					return reject(err);
 				}
@@ -80,11 +74,9 @@ export class MultipartWrapper {
 					}
 					if (multipartFiles.length === 0) return resolve(undefined);
 					if (!this.options.dest) return resolve(multipartFiles);
-					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
-						if (err) return reject(err);
-						const files = await this.writeFiles(multipartFiles);
-						return resolve(files);
-					});
+					await fs.promises.mkdir(this.options.dest, { recursive: true });
+					const files = await this.writeFiles(multipartFiles);
+					return resolve(files);
 				} catch (err) {
 					return reject(err);
 				}
@@ -107,23 +99,23 @@ export class MultipartWrapper {
 						};
 					}
 					const lastIteration = uploadFields.length - 1;
-					let fieldsObject: Record<string, InterceptorFile[]>;
+					let fieldsObject: Record<string, InterceptorFile[]> | undefined;
 					for (const [ii, field] of uploadFields.entries()) {
-						const fieldFile: InterceptorFile | InterceptorFile[] = multipartFields[field.name];
+						const fieldFile: InterceptorFile | InterceptorFile[] | undefined = multipartFields[field.name];
 						if (!fieldFile || field.maxCount === 0) continue;
 						let multipartFiles: InterceptorFile[] = Array.isArray(fieldFile) ? fieldFile : [fieldFile];
 						if (this.options.fileFilter) {
 							multipartFiles = this.filterFiles(req, multipartFiles);
 						}
+						if (multipartFiles.length === 0) {
+							if (ii === lastIteration) return resolve(fieldsObject);
+							continue;
+						};
 						if (multipartFiles.length > field.maxCount) {
 							return reject({
 								message: multipartExceptions.FST_FILES_LIMIT
 							});
 						}
-						if (multipartFiles.length === 0) {
-							if (ii === lastIteration) return resolve(fieldsObject);
-							continue;
-						};
 						if (!this.options.dest) {
 							if (!fieldsObject) {
 								fieldsObject = Object.create(null);
@@ -132,15 +124,15 @@ export class MultipartWrapper {
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue;
 						}
-						fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
-							if (err) return reject(err);
-							const files = await this.writeFiles(multipartFiles);
-							if (!fieldsObject) {
-								fieldsObject = Object.create(null);
-							}
-							fieldsObject[field.name] = files;
-							if (ii === lastIteration) return resolve(fieldsObject);
-						});
+						if (ii === 0) {
+							await fs.promises.mkdir(this.options.dest, { recursive: true });
+						}
+						const files = await this.writeFiles(multipartFiles);
+						if (!fieldsObject) {
+							fieldsObject = Object.create(null);
+						}
+						fieldsObject[field.name] = files;
+						if (ii === lastIteration) return resolve(fieldsObject);
 					}
 				} catch (err) {
 					return reject(err);
