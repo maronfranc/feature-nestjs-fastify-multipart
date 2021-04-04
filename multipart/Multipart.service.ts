@@ -9,7 +9,7 @@ export class MultipartWrapper {
 	public constructor(private options: MultipartOptions) { }
 
 	public file(fieldname: string) {
-		return async (req: any): Promise<InterceptorFile> => {
+		return async (req: any): Promise<InterceptorFile | undefined> => {
 			return new Promise<InterceptorFile>(async (resolve, reject) => {
 				try {
 					const multipartFile = await this.getFileFields(req);
@@ -26,8 +26,8 @@ export class MultipartWrapper {
 							fieldFile.file.destroy();
 							return reject(err);
 						}
-						const result = await this.writeFile(fieldFile);
-						return resolve(result);
+						const file = await this.writeFile(fieldFile);
+						return resolve(file);
 					});
 				} catch (err) {
 					return reject(err);
@@ -37,7 +37,7 @@ export class MultipartWrapper {
 	}
 
 	public files(fieldname: string, maxCount?: number) {
-		return async (req: any): Promise<InterceptorFile[]> => {
+		return async (req: any): Promise<InterceptorFile[] | undefined> => {
 			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
 				try {
 					const options = { ...this.options };
@@ -57,8 +57,8 @@ export class MultipartWrapper {
 					if (!this.options.dest) return resolve(multipartFiles);
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
-						const result = await this.writeFiles(multipartFiles);
-						return resolve(result);
+						const files = await this.writeFiles(multipartFiles);
+						return resolve(files);
 					});
 				} catch (err) {
 					return reject(err);
@@ -69,7 +69,7 @@ export class MultipartWrapper {
 
 	public any() {
 		return async (req: any): Promise<InterceptorFile[]> => {
-			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
+			return new Promise<InterceptorFile[] | undefined>(async (resolve, reject) => {
 				try {
 					const fields = await this.getFilesFields(req);
 					const multipartFilesValues = Object.values<InterceptorFile | InterceptorFile[]>(fields);
@@ -81,8 +81,8 @@ export class MultipartWrapper {
 					if (!this.options.dest) return resolve(multipartFiles);
 					fs.mkdir(this.options.dest, { recursive: true }, async (err) => {
 						if (err) return reject(err);
-						const result = await this.writeFiles(multipartFiles);
-						return resolve(result);
+						const files = await this.writeFiles(multipartFiles);
+						return resolve(files);
 					});
 				} catch (err) {
 					return reject(err);
@@ -92,16 +92,18 @@ export class MultipartWrapper {
 	}
 
 	public fileFields(uploadFields: UploadField[]) {
-		return async (req: any): Promise<Record<string, InterceptorFile[]>> => {
+		return async (req: any): Promise<Record<string, InterceptorFile[]> | undefined> => {
 			return new Promise(async (resolve, reject) => {
 				try {
 					const multipartFields = await this.getFilesFields(req);
 					const multipartFieldKeys = Object.keys(multipartFields);
 					const uploadFieldKeys = uploadFields.map((uploadField) => uploadField.name);
 					for (const multipartFieldKey of multipartFieldKeys) {
-						if (!uploadFieldKeys.includes(multipartFieldKey)) return reject({
-							message: multipartExceptions.LIMIT_UNEXPECTED_FILE
-						});
+						if (!uploadFieldKeys.includes(multipartFieldKey)) {
+							return reject({
+								message: multipartExceptions.LIMIT_UNEXPECTED_FILE
+							});
+						};
 					}
 					const lastIteration = uploadFields.length - 1;
 					let fieldsObject: Record<string, InterceptorFile[]>;
