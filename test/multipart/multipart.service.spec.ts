@@ -1,15 +1,13 @@
-import * as chai from 'chai';
 import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as path from "path";
+import { expect } from 'chai';
 import { MultipartOptions } from '../../multipart/interfaces/multipart-options.interface';
 import { MultipartWrapper } from '../../multipart/Multipart.service';
 import { Readable, PassThrough } from 'stream';
 import { InterceptorFile } from '../../multipart/interfaces/multipart-file.interface';
-
-const { expect } = chai;
-const chaiAsPromised = require('chai-as-promised');
-chai.use(chaiAsPromised);
+import { HttpException, HttpStatus } from '@nestjs/common';
+import { multipartExceptions } from '../../multipart/multipart/multipart.constants';
 
 describe('MultipartWrapper', () => {
 	before(() => {
@@ -23,10 +21,10 @@ describe('MultipartWrapper', () => {
 		sinon.restore();
 	});
 
-	const arrayFieldname = 'files';
 	const objectFieldname = 'file';
-	let filesArray: any[] = [];
+	const arrayFieldname = 'files';
 	let fileObject: any = {};
+	let filesArray: any[] = [];
 	let multipartFiles: any = {};
 	async function* getMultipartIterator() {
 		while (true) {
@@ -60,7 +58,7 @@ describe('MultipartWrapper', () => {
 			}
 		];
 		fileObject = {
-			fieldname: arrayFieldname,
+			fieldname: objectFieldname,
 			filename: 'test3.png',
 			encoding: '7bit',
 			mimetype: 'image/png',
@@ -153,7 +151,30 @@ describe('MultipartWrapper', () => {
 			expect(writeFilesStub.calledWith(fileObject.fields[objectFieldname])).to.be.true;
 		});
 
-		// it('should filter files if options.fileFilter() is defined', async () => { })
+		it('should return undefined if fileFilter callback is (null, false)', async () => {
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(null, false)
+			}
+			const multipart = new MultipartWrapper(options);
+			const file = await multipart.file(objectFieldname)(req);
+			expect(file).to.be.undefined;
+		});
+
+		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+			const errorMessage = 'Expect fileFilter test to throw error';
+			const errorStatus = HttpStatus.BAD_REQUEST;
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(new HttpException(errorMessage, errorStatus), false)
+			}
+			const multipart = new MultipartWrapper(options);
+			try {
+				await multipart.file(objectFieldname)(req);
+			} catch (err) {
+				expect(err.status).to.equal(errorStatus);
+				expect(err.response).to.equal(errorMessage);
+				expect(err instanceof HttpException).to.be.true;
+			}
+		});
 	});
 
 	describe('files', () => {
@@ -171,22 +192,14 @@ describe('MultipartWrapper', () => {
 		});
 
 		it('should call req.files() with expected options', async () => {
-			const fieldname = 'files';
 			const maxCount = 10;
 			const options: MultipartOptions = {
 				limits: {},
 			}
 			const multipart = new MultipartWrapper(options);
-			const req = {
-				files: async (options: MultipartOptions) => { },
-			};
-			const multipartFilesGenerator: any = {
-				next: () => { }
-			};
 			const reqStub = sinon
-				.stub(req, 'files')
-				.returns(multipartFilesGenerator);
-			multipart.files(fieldname, maxCount)(req);
+				.stub(req, 'files');
+			multipart.files(arrayFieldname, maxCount)(req);
 
 			expect(reqStub.called).to.be.true;
 			expect(reqStub.calledWith({
@@ -219,10 +232,49 @@ describe('MultipartWrapper', () => {
 			expect(writeFilesStub.called).to.be.true;
 			expect(writeFilesStub.calledWith(multipartFiles.fields[arrayFieldname])).to.be.true;
 		});
+
+		it('should return undefined if fileFilter callback is (null, false)', async () => {
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(null, false)
+			}
+			const multipart = new MultipartWrapper(options);
+			const files = await multipart.files(arrayFieldname)(req);
+			expect(files).to.be.undefined;
+		});
+
+		it("should omit specific file if callback is (null, false)", async () => {
+			const fileToOmit: InterceptorFile = filesArray[1];
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => {
+					if (file.filename === fileToOmit.filename) {
+						return cb(null, false);
+					}
+					cb(null, true);
+				}
+			}
+			const multipart = new MultipartWrapper(options);
+			const files = await multipart.files(arrayFieldname)(req);
+			expect(files).to.not.have.members([fileToOmit]);
+		});
+
+		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+			const errorMessage = 'Expect fileFilter test to throw error';
+			const errorStatus = HttpStatus.BAD_REQUEST;
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(new HttpException(errorMessage, errorStatus), false)
+			}
+			const multipart = new MultipartWrapper(options);
+			try {
+				await multipart.files(arrayFieldname)(req);
+			} catch (err) {
+				expect(err.status).to.equal(errorStatus);
+				expect(err.response).to.equal(errorMessage);
+				expect(err instanceof HttpException).to.be.true;
+			}
+		});
 	});
 
 	describe('any', () => {
-
 		it('should call req.files() with expected options', async () => {
 			const options: MultipartOptions = {
 				limits: {},
@@ -261,6 +313,46 @@ describe('MultipartWrapper', () => {
 			const multipartFilesValues = Object.values<InterceptorFile | InterceptorFile[]>(reqFilesData.value.fields);
 			const flatMultipartFiles: InterceptorFile[] = ([] as InterceptorFile[]).concat(...multipartFilesValues);
 			expect(writeFilesStub.calledWith(flatMultipartFiles)).to.be.true;
+		});
+
+		it('should return undefined if fileFilter callback is (null, false)', async () => {
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(null, false)
+			}
+			const multipart = new MultipartWrapper(options);
+			const files = await multipart.any()(req);
+			expect(files).to.be.undefined;
+		});
+
+		it("should omit specific file if callback is (null, false)", async () => {
+			const fileToOmit: InterceptorFile = filesArray[1];
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => {
+					if (file.filename === fileToOmit.filename) {
+						return cb(null, false);
+					}
+					cb(null, true);
+				}
+			}
+			const multipart = new MultipartWrapper(options);
+			const files = await multipart.any()(req);
+			expect(files).to.not.have.members([fileToOmit]);
+		});
+
+		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+			const errorMessage = 'Expect fileFilter test to throw error';
+			const errorStatus = HttpStatus.BAD_REQUEST;
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(new HttpException(errorMessage, errorStatus), false)
+			}
+			const multipart = new MultipartWrapper(options);
+			try {
+				await multipart.any()(req);
+			} catch (err) {
+				expect(err.status).to.equal(errorStatus);
+				expect(err.response).to.equal(errorMessage);
+				expect(err instanceof HttpException).to.be.true;
+			}
 		});
 	});
 
@@ -316,36 +408,87 @@ describe('MultipartWrapper', () => {
 			expect(writeFilesStub.getCall(1).calledWith([fileObject])).to.be.true;
 		});
 
-		// it('should throw exception if file exceed maxCount', async () => {
-		// 	const options: MultipartOptions = {
-		// 		dest: 'upload/test',
-		// 	}
-		// 	const multipart = new MultipartWrapper(options);
-		// 	const reqFilesData: any = await getMultipartIterator().next();
-		// 	const testFiles = reqFilesData.value.fields[arrayFieldname];
-		// 	delete reqFilesData.value.fields;
-		// 	reqFilesData.value.fields = {
-		// 		[arrayFieldname]: testFiles
-		// 	};
-		// 	const writeFilesStub = sinon.stub(multipart, <any>'writeFiles');
-		// 	// const multipartSpy = sinon.spy(multipart, 'fileFields');
-		// 	const maxCount = testFiles.length - 1;
-		// 	// expect(multipart.fileFields([
-		// 	// 	{ name: arrayFieldname, maxCount },
-		// 	// ])(req)).to.eventually.throw();
-		// 	// expect(writeFilesStub.called).to.be.false;
-		// 	// expect(multipartSpy).to.have.throw();
-		// 	try {
-		// 		await multipart.fileFields([
-		// 			{ name: arrayFieldname, maxCount: 1 },
-		// 		])(req)
-		// 	} catch (err) {
-		// 	}
-		// 	// expect().to.throw();
-		// 	// expect(writeFilesStub.called).to.be.true;
-		// 	// expect(writeFilesStub.throws).to.be.true;
-		// 	// expect(writeFilesStub.calledWith([testFiles[0]])).to.be.true;
-		// });
+		it('should return undefined if fileFilter callback is (null, false)', async () => {
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(null, false)
+			}
+			const multipart = new MultipartWrapper(options);
+			const files = await multipart.fileFields([
+				{ name: arrayFieldname, maxCount: 10 },
+				{ name: objectFieldname, maxCount: 10 },
+			])(req);
+			expect(files).to.be.undefined;
+		});
+
+		it("should omit specific file if callback is (null, false)", async () => {
+			const multipartFiles = await getMultipartIterator().next();
+			const fileToOmitInArray: InterceptorFile = multipartFiles.value.fields[arrayFieldname][1];
+			const fileToOmit: InterceptorFile = multipartFiles.value.fields[objectFieldname];
+			// const fileToOmit: InterceptorFile = filesArray[1];
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => {
+					if (file.filename === fileToOmit.filename || file.filename === fileToOmitInArray.filename) {
+						return cb(null, false);
+					}
+					cb(null, true);
+				}
+			}
+			const multipart = new MultipartWrapper(options);
+			const filesRecord = await multipart.fileFields([
+				{ name: arrayFieldname, maxCount: 10 },
+				{ name: objectFieldname, maxCount: 10 },
+			])(req);
+			expect(filesRecord[arrayFieldname]).to.not.have.members([fileToOmit]);
+			expect(filesRecord[objectFieldname]).to.be.undefined;
+		});
+
+		it('should throw error if fileFilter callback is (Error, Boolean)', async () => {
+			const errorMessage = 'Expect fileFilter test to throw error';
+			const errorStatus = HttpStatus.BAD_REQUEST;
+			const options: MultipartOptions = {
+				fileFilter: (req, file, cb) => cb(new HttpException(errorMessage, errorStatus), false)
+			}
+			const multipart = new MultipartWrapper(options);
+			try {
+				await multipart.fileFields([
+					{ name: arrayFieldname, maxCount: 10 },
+					{ name: objectFieldname, maxCount: 10 },
+				])(req);
+			} catch (err) {
+				expect(err.status).to.equal(errorStatus);
+				expect(err.response).to.equal(errorMessage);
+				expect(err instanceof HttpException).to.be.true;
+			}
+		});
+
+		it('should throw exception if field is missing', async () => {
+			const multipart = new MultipartWrapper({});
+			const differentFieldname = 'different-fieldname';
+			multipartFiles.fields[differentFieldname] = multipartFiles.fields[arrayFieldname];
+			try {
+				const files = await multipart.fileFields([
+					{ name: arrayFieldname, maxCount: 10 },
+					{ name: objectFieldname, maxCount: 10 },
+				])(req);
+				expect(files).to.not.undefined;
+			} catch (err) {
+				expect(err.message).to.equal(multipartExceptions.LIMIT_UNEXPECTED_FILE);
+			}
+		});
+
+		it('should throw exception if files exceed maxCount', async () => {
+			const multipart = new MultipartWrapper({});
+			const reqFilesData: any = await getMultipartIterator().next();
+			const maxCount = reqFilesData.value.fields[arrayFieldname].length - 1;
+			try {
+				await multipart.fileFields([
+					{ name: arrayFieldname, maxCount },
+					{ name: objectFieldname, maxCount: 1 },
+				])(req)
+			} catch (err) {
+				expect(err.message).to.equal(multipartExceptions.FST_FILES_LIMIT);
+			}
+		});
 	});
 
 	// describe('filterFiles', () => {
