@@ -104,7 +104,7 @@ export class MultipartWrapper {
 						});
 					}
 					const lastIteration = uploadFields.length - 1;
-					let fieldsObject: Record<string, InterceptorFile[]>;
+					let fieldsObject: Record<string, InterceptorFile[]> | undefined = undefined;
 					for (const [ii, field] of uploadFields.entries()) {
 						const fieldFile: InterceptorFile | InterceptorFile[] = multipartFields[field.name];
 						if (!fieldFile || field.maxCount === 0) continue;
