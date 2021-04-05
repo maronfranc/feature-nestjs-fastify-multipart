@@ -42,25 +42,25 @@ export class MultipartWrapper {
                     };
                 }
                 const files: InterceptorFile[] = [];
-                const parts = await req.files(options);
+                const filesIterator = await req.files(options);
                 let isFirstIteration = true;
-                for await (let part of parts) {
-                    if (part.fieldname !== fieldname) {
-                        part.file.emit('end');
+                for await (let multipartFile of filesIterator) {
+                    if (multipartFile.fieldname !== fieldname) {
+                        multipartFile.file.emit('end');
                         continue;
                     };
                     // if (options.fileFilter) {
-                    // 	part = this.filterFiles(req, part);
+                    // 	multipartFile = this.filterFiles(req, multipartFile);
                     // }
-                    // if (!part) {
-                    // 	part.file.emit('end');
+                    // if (!multipartFile) {
+                    // 	multipartFile.file.emit('end');
                     // 	continue;
                     // };
                     if (isFirstIteration) {
                         isFirstIteration = false;
                         await fs.promises.mkdir(options.dest, { recursive: true });
                     }
-                    const file = await this.writeFile(part);
+                    const file = await this.writeFile(multipartFile);
                     files.push(file);
                 }
                 return resolve(files);
@@ -126,6 +126,7 @@ export class MultipartWrapper {
                                 if (ii === lastIteration) return resolve(fieldsObject);
                                 continue;
                             }
+                            // TODO: check if folder exists
                             if (ii === 0) {
                                 await fs.promises.mkdir(this.options.dest, { recursive: true });
                             }
