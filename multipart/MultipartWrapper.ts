@@ -4,6 +4,7 @@ import { MultipartOptions, UploadField } from "./interfaces/multipart-options.in
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import { InterceptorFile } from './interfaces/multipart-file.interface';
 import { multipartExceptions } from './multipart/multipart.constants';
+
 export class MultipartWrapper {
     public constructor(private options: MultipartOptions) { }
 
@@ -91,28 +92,34 @@ export class MultipartWrapper {
         return async (req: any): Promise<Record<string, InterceptorFile[]> | undefined> => {
             return new Promise(async (resolve, reject) => {
                 try {
-                    /* [{ name:"files"},  {name: "files2" }] */
-                    /*  ["files", "files2"] */
-                    let isFirstIteration = true;
-                    let fieldsObject: Record<string, InterceptorFile[]> | undefined;
                     const parts: Generator<InterceptorFile> = await req.files(this.options);
+                    let fieldsObject: Record<string, InterceptorFile[]> | undefined;
                     for await (const multipartFile of parts) {
                         // this.validateUploadFields(uploadFields, multipartFile);
                         const uploadFieldKeys = uploadFields.map((uploadField) => uploadField.name);
-                        const multipartFieldKeys = Object.entries(multipartFile.fields);
-                        const lastIteration = multipartFieldKeys.length - 1;
-                        for (const [ii, [multipartFieldKey, multipartFile]] of multipartFieldKeys.entries()) {
+                        const multipartFieldEntries = Object.entries(multipartFile.fields);
+                        for await (const [ii, [multipartFieldKey, multipartFile]] of multipartFieldEntries.entries()) {
                             const indexOfUploadField = uploadFieldKeys.indexOf(multipartFieldKey);
                             if (indexOfUploadField === -1) {
                                 throw new Error(multipartExceptions.LIMIT_UNEXPECTED_FILE);
                             };
+                            const isLastIteration = multipartFieldEntries[ii + 1] === undefined;
                             const field = uploadFields[indexOfUploadField];
+                            const fileIsNotInUploadFields =
+                                !Array.isArray(multipartFile) &&
+                                !multipartFile.fields[field.name] ||
+                                Array.isArray(multipartFile) &&
+                                !multipartFile[0].fields[field.name];
+                            if (fileIsNotInUploadFields) {
+                                if (isLastIteration) return resolve(fieldsObject);
+                                continue;
+                            }
                             let multipartFiles = Array.isArray(multipartFile) ? multipartFile : [multipartFile];
                             if (this.options.fileFilter) {
                                 multipartFiles = this.filterFiles(req, multipartFiles);
                             }
                             if (multipartFiles.length === 0) {
-                                if (ii === lastIteration) return resolve(fieldsObject);
+                                if (isLastIteration) return resolve(fieldsObject);
                                 continue;
                             };
                             if (multipartFiles.length > field.maxCount) {
@@ -123,19 +130,21 @@ export class MultipartWrapper {
                                     fieldsObject = Object.create(null);
                                 }
                                 fieldsObject[field.name] = multipartFiles;
-                                if (ii === lastIteration) return resolve(fieldsObject);
+                                for (const multipartFile of multipartFiles) {
+                                    multipartFile.file.emit('end');
+                                }
+                                if (isLastIteration) return resolve(fieldsObject);
                                 continue;
                             }
-                            // TODO: check if folder exists
                             if (ii === 0) {
                                 await fs.promises.mkdir(this.options.dest, { recursive: true });
                             }
-                            const files = await this.writeFiles(multipartFiles);
                             if (!fieldsObject) {
                                 fieldsObject = Object.create(null);
                             }
+                            const files = await this.writeFiles(multipartFiles);
                             fieldsObject[field.name] = files;
-                            if (ii === lastIteration) return resolve(fieldsObject);
+                            if (isLastIteration) return resolve(fieldsObject);
                         }
                     }
                 } catch (err) {
@@ -144,30 +153,6 @@ export class MultipartWrapper {
             });
         }
     }
-
-    private validateUploadFields(uploadFields: UploadField[], multipartFile: InterceptorFile): void {
-        const multipartFieldKeys = Object.entries(multipartFile.fields);
-        const uploadFieldKeys = uploadFields.map((uploadField) => uploadField.name);
-        for (const [multipartFieldKey, multipartFiles] of multipartFieldKeys) {
-            const indexOfUploadField = uploadFieldKeys.indexOf(multipartFieldKey);
-            if (indexOfUploadField === -1) {
-                throw new Error(multipartExceptions.LIMIT_UNEXPECTED_FILE);
-            };
-            if (
-                Array.isArray(multipartFiles) &&
-                multipartFiles.length > uploadFields[indexOfUploadField].maxCount
-            ) {
-                throw new Error(multipartExceptions.FST_FILES_LIMIT);
-            }
-        }
-    }
-
-    // private async *getMultipartIterator(files: any[]) {
-    // 	let part
-    // 	while ((part = await parts()) != null) {
-    // 		yield part
-    // 	}
-    // }
 
     private async writeFile(file: InterceptorFile): Promise<InterceptorFile> {
         return new Promise((resolve, reject) => {
@@ -202,6 +187,7 @@ export class MultipartWrapper {
                 } catch (err) {
                     return reject(err);
                 }
+                // TODO: arr[ii + 1] === undefined === hasNext();
                 if (ii === lastIteration) return resolve(files);
             }
         });
