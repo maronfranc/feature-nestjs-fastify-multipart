@@ -3,21 +3,21 @@ import { Observable } from 'rxjs';
 import { MULTIPART_MODULE_OPTIONS } from '../files.constants';
 import { transformException } from '../multipart/multipart.utils';
 import { MultipartOptions, UploadField } from '../interfaces/multipart-options.interface';
-import { MultipartService } from '../Multipart.service';
+import { MultipartWrapper } from '../MultipartWrapper';
 
 export const FileFieldsInterceptor = (
 	uploadFields: UploadField[],
 	localOptions?: MultipartOptions,
 ): Type<NestInterceptor> => {
 	class MixinInterceptor implements NestInterceptor {
-		protected multipart: MultipartService;
+		protected multipart: MultipartWrapper;
 
 		public constructor(
 			@Optional()
 			@Inject(MULTIPART_MODULE_OPTIONS)
 			options: MultipartOptions = {}
 		) {
-			this.multipart = new MultipartService({
+			this.multipart = new MultipartWrapper({
 				...options,
 				...localOptions
 			});
@@ -27,7 +27,7 @@ export const FileFieldsInterceptor = (
 			const req = context.switchToHttp().getRequest();
 			const fieldname = 'files';
 			try {
-				req[fieldname] = await this.multipart.fileFields(uploadFields)(req);
+				req[fieldname] = await this.multipart.fileFields(uploadFields)(req);;
 			} catch (err) {
 				throw transformException(err);
 			}

@@ -7,8 +7,6 @@ export const multipartExceptions = {
     FST_INVALID_MULTIPART_CONTENT_TYPE: 'the request is not multipart',
     // multer exception
     LIMIT_UNEXPECTED_FILE: 'Unexpected field',
-    NODE_MKDIR: "DEV_TEST_MKDIR_ERROR",
-    NODE_WRITE_FILE: "DEV_TEST_WRITE_FILE_ERROR",
 } as const;
 
 export type MultipartKey = keyof typeof multipartExceptions;

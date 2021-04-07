@@ -3,18 +3,18 @@ import { Observable } from 'rxjs';
 import { MULTIPART_MODULE_OPTIONS } from '../files.constants';
 import { transformException } from '../multipart/multipart.utils';
 import { MultipartOptions } from '../interfaces/multipart-options.interface';
-import { MultipartService } from '../Multipart.service';
+import { MultipartWrapper } from '../MultipartWrapper';
 
 export const FileInterceptor = (fieldname: string, localOptions?: MultipartOptions): Type<NestInterceptor> => {
 	class MixinInterceptor implements NestInterceptor {
-		protected multipart: MultipartService;
+		protected multipart: MultipartWrapper;
 
 		public constructor(
 			@Optional()
 			@Inject(MULTIPART_MODULE_OPTIONS)
 			options: MultipartOptions = {}
 		) {
-			this.multipart = new MultipartService({
+			this.multipart = new MultipartWrapper({
 				...options,
 				...localOptions
 			});
@@ -23,7 +23,7 @@ export const FileInterceptor = (fieldname: string, localOptions?: MultipartOptio
 		public async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
 			const req = context.switchToHttp().getRequest();
 			try {
-				req[fieldname] = await this.multipart.file(fieldname)(req);;
+				req[fieldname] = await this.multipart.file(fieldname)(req);
 			} catch (err) {
 				throw transformException(err);
 			}

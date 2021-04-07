@@ -1,26 +1,30 @@
 import {
 	BadRequestException,
 	HttpException,
+	InternalServerErrorException,
 	NotAcceptableException,
 	PayloadTooLargeException,
 } from '@nestjs/common';
 import { multipartExceptions } from './multipart.constants';
 
-export function transformException(error: Error | undefined) {
-	if (!error || error instanceof HttpException) {
-		return error;
+export function transformException(err: Error | undefined) {
+	if (!err || err instanceof HttpException) {
+		return err;
 	}
-	switch (error as any) {
+	switch (err.message) {
 		case multipartExceptions.FST_PARTS_LIMIT:
 		case multipartExceptions.FST_FILES_LIMIT:
 		case multipartExceptions.FST_FIELDS_LIMIT:
 		case multipartExceptions.FST_REQ_FILE_TOO_LARGE:
-			return new PayloadTooLargeException(error.message);
+			return new PayloadTooLargeException(err.message);
 		case multipartExceptions.FST_INVALID_MULTIPART_CONTENT_TYPE:
-			return new NotAcceptableException(error.message);
+			return new NotAcceptableException(err.message);
 		case multipartExceptions.FST_PROTO_VIOLATION:
 		case multipartExceptions.LIMIT_UNEXPECTED_FILE:
-			return new BadRequestException(error.message);
+			return new BadRequestException(err.message);
 	}
-	return error;
+	if (err instanceof Error) {
+		throw new InternalServerErrorException(err.message);
+	}
+	return err;
 }

@@ -1,19 +1,22 @@
-import * as path from 'path';
 import * as fs from 'fs';
-import { MultipartOptions, UploadField } from "./interfaces/multipart-options.interface";
+import { MultipartOptions, UploadField } from "../interfaces/multipart-options.interface";
+import { InterceptorDiskFile, InterceptorFile, MultipartFile } from '../interfaces/multipart-file.interface';
+import { multipartExceptions } from './multipart.constants';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
-import { InterceptorFile } from './interfaces/multipart-file.interface';
-import { multipartExceptions } from './multipart/multipart.constants';
+import { BaseMultipartWrapper } from './base-multipart-wrapper.interface';
+import path from 'path';
 
-export class MultipartWrapper {
-	public constructor(private options: MultipartOptions) { }
+type FastityRequest = any;
+
+export class MultipartAttachedToBody implements BaseMultipartWrapper {
+	public constructor(protected options: MultipartOptions) { }
 
 	public file(fieldname: string) {
-		return async (req: any): Promise<InterceptorFile | undefined> => {
-			return new Promise<InterceptorFile>(async (resolve, reject) => {
+		return async (req: FastityRequest): Promise<InterceptorFile | undefined> => {
+			return new Promise(async (resolve, reject) => {
 				try {
-					const fieldFile = await this.getFileFields(req);
-					const multipartFile = fieldFile[fieldname];
+					const fieldFile = req.body;
+					const multipartFile: MultipartFile = fieldFile[fieldname];
 					if (!multipartFile) return resolve(undefined);
 					if (this.options.fileFilter) {
 						this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
@@ -33,8 +36,8 @@ export class MultipartWrapper {
 	}
 
 	public files(fieldname: string, maxCount?: number) {
-		return async (req: any): Promise<InterceptorFile[] | undefined> => {
-			return new Promise<InterceptorFile[]>(async (resolve, reject) => {
+		return async (req: FastityRequest): Promise<InterceptorFile[] | undefined> => {
+			return new Promise(async (resolve, reject) => {
 				const options = { ...this.options };
 				if (maxCount) {
 					options.limits = {
@@ -43,8 +46,8 @@ export class MultipartWrapper {
 					};
 				}
 				try {
-					const multipartFileFields = await this.getFilesFields(req, options);
-					const fieldFiles = multipartFileFields[fieldname];
+					const multipartFileFields = req.body;
+					const fieldFiles: InterceptorFile | InterceptorFile[] = multipartFileFields[fieldname];
 					let multipartFiles: InterceptorFile[] = Array.isArray(fieldFiles) ? fieldFiles : [fieldFiles];
 					if (options.fileFilter) {
 						multipartFiles = this.filterFiles(req, multipartFiles);
@@ -62,12 +65,12 @@ export class MultipartWrapper {
 	}
 
 	public any() {
-		return async (req: any): Promise<InterceptorFile[]> => {
-			return new Promise<InterceptorFile[] | undefined>(async (resolve, reject) => {
+		return async (req: FastityRequest): Promise<InterceptorFile[] | undefined> => {
+			return new Promise(async (resolve, reject) => {
 				try {
-					const fields = await this.getFilesFields(req);
-					const multipartFilesValues = Object.values<InterceptorFile | InterceptorFile[]>(fields);
-					let multipartFiles: InterceptorFile[] = ([] as InterceptorFile[]).concat(...multipartFilesValues);
+					const fields = req.body;
+					const multipartFilesValues = Object.values<MultipartFile | MultipartFile[]>(fields);
+					let multipartFiles: MultipartFile[] = ([] as MultipartFile[]).concat(...multipartFilesValues);
 					if (this.options.fileFilter) {
 						multipartFiles = this.filterFiles(req, multipartFiles);
 					}
@@ -84,10 +87,10 @@ export class MultipartWrapper {
 	}
 
 	public fileFields(uploadFields: UploadField[]) {
-		return async (req: any): Promise<Record<string, InterceptorFile[]> | undefined> => {
+		return async (req: FastityRequest): Promise<Record<string, InterceptorFile[]> | undefined> => {
 			return new Promise(async (resolve, reject) => {
 				try {
-					const multipartFields = await this.getFilesFields(req);
+					const multipartFields: Record<string, InterceptorFile> = req.body
 					const multipartFieldKeys = Object.keys(multipartFields);
 					const uploadFieldKeys = uploadFields.map((uploadField) => uploadField.name);
 					for (const multipartFieldKey of multipartFieldKeys) {
@@ -100,12 +103,12 @@ export class MultipartWrapper {
 					const lastIteration = uploadFields.length - 1;
 					let fieldsObject: Record<string, InterceptorFile[]> | undefined;
 					for (const [ii, field] of uploadFields.entries()) {
-						const fieldFile: InterceptorFile | InterceptorFile[] | undefined = multipartFields[field.name];
+						const fieldFile: MultipartFile | MultipartFile[] | undefined = multipartFields[field.name];
 						if (!fieldFile || field.maxCount === 0) {
 							if (ii === lastIteration) return resolve(fieldsObject);
 							continue
 						};
-						let multipartFiles: InterceptorFile[] = Array.isArray(fieldFile) ? fieldFile : [fieldFile];
+						let multipartFiles: MultipartFile[] = Array.isArray(fieldFile) ? fieldFile : [fieldFile];
 						if (this.options.fileFilter) {
 							multipartFiles = this.filterFiles(req, multipartFiles);
 						}
@@ -143,58 +146,36 @@ export class MultipartWrapper {
 		}
 	}
 
-	private async writeFile(file: InterceptorFile): Promise<InterceptorFile> {
-		return new Promise((resolve, reject) => {
-			const multipartFile = { ...file };
-			const filename = multipartFile.filename;
-			const extension = path.extname(multipartFile.filename);
-			multipartFile.originalname = filename;
-			multipartFile.filename = randomStringGenerator() + extension;
-			const filePath = path.join(this.options.dest, multipartFile.filename);
-			const outStream = fs.createWriteStream(filePath);
-			multipartFile.file.pipe(outStream);
-			outStream.on('error', (err) => {
-				multipartFile.file.destroy();
-				return reject(err);
-			});
-			outStream.on('finish', () => {
-				multipartFile.size = outStream.bytesWritten;
-				return resolve(multipartFile);
-			});
-		});
+	private async writeFile(file: MultipartFile): Promise<InterceptorDiskFile> {
+		const multipartFile = { ...file } as InterceptorDiskFile;
+		const filename = multipartFile.filename;
+		const extension = path.extname(multipartFile.filename);
+		multipartFile.originalname = filename;
+		multipartFile.filename = randomStringGenerator() + extension;
+		const filePath = path.join(this.options.dest, multipartFile.filename);
+		await fs.promises.writeFile(filePath, multipartFile._buf);
+		multipartFile.size = Buffer.byteLength(multipartFile._buf);
+		return multipartFile;
 	}
 
-	private async writeFiles(multipartFiles: InterceptorFile[]): Promise<InterceptorFile[]> {
+	private async writeFiles(multipartFiles: MultipartFile[]): Promise<InterceptorDiskFile[]> {
 		return new Promise(async (resolve, reject) => {
 			if (multipartFiles.length === 0) return resolve([]);
-			const files: InterceptorFile[] = [];
+			const files: InterceptorDiskFile[] = [];
 			const lastIteration = multipartFiles.length - 1;
-			for await (const [ii, multipart] of multipartFiles.entries()) {
+			for (const [ii, multipart] of multipartFiles.entries()) {
 				try {
 					const file = await this.writeFile(multipart);
 					files.push(file);
+					if (ii === lastIteration) return resolve(files);
 				} catch (err) {
 					return reject(err);
 				}
-				if (ii === lastIteration) return resolve(files);
 			}
 		});
 	}
 
-	private async getFileFields(req: any, options?: MultipartOptions): Promise<Record<string, InterceptorFile> | undefined> {
-		if (req.body) return req.body;
-		const file = await req.file(options || this.options);
-		return file.fields;
-	}
-
-	private async getFilesFields(req: any, options?: MultipartOptions): Promise<Record<string, InterceptorFile[]>> {
-		if (req.body) return req.body;
-		const filesAsyncGenerator = await req.files(options || this.options);
-		const data = await filesAsyncGenerator.next();
-		return data.value?.fields;
-	}
-
-	private filterFiles(req: any, multipartFiles: InterceptorFile[]): InterceptorFile[] {
+	private filterFiles(req: FastityRequest, multipartFiles: InterceptorFile[]): InterceptorFile[] {
 		const files: InterceptorFile[] = [];
 		for (const multipart of multipartFiles) {
 			this.options.fileFilter(req, multipart, (err, acceptFile) => {
