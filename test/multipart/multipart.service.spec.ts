@@ -35,9 +35,7 @@ describe('MultipartWrapper', () => {
 	});
 
 	beforeEach(() => {
-		(fs as any).mkdir = (path: string, options: any, callback: () => any) => {
-			return callback();
-		}
+		(fs as any).promises.mkdir = (path: string, options: any) => { }
 		(fs as any).createWriteStream = (path: string) => new PassThrough();
 		filesArray = [
 			{
@@ -106,27 +104,27 @@ describe('MultipartWrapper', () => {
 			const file = await (multipart as any).writeFile(fileObject);
 			expect(file.size).to.be.equal(bytesWritten);
 		});
-		// it('should emit error', async () => {
-		// 	const bytesWritten = 1234;
-		// 	(fs as any).createWriteStream = (path: string) => {
-		// 		const mockCreateWriteStream = new PassThrough();
-		// 		mockCreateWriteStream.on('end', () => {
-		// 			console.log(" ----- ----- | END | ----- ----- ");
-		// 			mockCreateWriteStream.emit('error');
-		// 		});
-		// 		return mockCreateWriteStream;
-		// 	};
-		// 	const options: MultipartOptions = {
-		// 		dest: "upload/test"
-		// 	};
-		// 	const multipart = new MultipartWrapper(options);
-		// 	// const destroyStub = sinon.stub(fileObject.file, 'destroy'); 
-		// 	const file = await (multipart as any).writeFile(fileObject);
-		// 	// console.log(" ----- ----- | destroyStub | ----- ----- ", typeof destroyStub);
-		// 	// console.log(destroyStub);
-		// 	// console.log(" _____ _____ | destroyStub | _____ _____ ", typeof destroyStub);
-		// 	// expect(destroyStub.called).to.be.true;
-		// });
+		it('should emit error', async () => {
+			const bytesWritten = 1234;
+			(fs as any).createWriteStream = (path: string) => {
+				const mockCreateWriteStream = new PassThrough();
+				mockCreateWriteStream.on('end', () => {
+					console.log(" ----- ----- | END | ----- ----- ");
+					mockCreateWriteStream.emit('error');
+				});
+				return mockCreateWriteStream;
+			};
+			const options: MultipartOptions = {
+				dest: "upload/test"
+			};
+			const multipart = new MultipartWrapper(options);
+			// const destroyStub = sinon.stub(fileObject.file, 'destroy'); 
+			const file = await (multipart as any).writeFile(fileObject);
+			// console.log(" ----- ----- | destroyStub | ----- ----- ", typeof destroyStub);
+			// console.log(destroyStub);
+			// console.log(" _____ _____ | destroyStub | _____ _____ ", typeof destroyStub);
+			// expect(destroyStub.called).to.be.true;
+		});
 	});
 	describe('writeFiles', () => {
 		it('should call writeFile() with expected params', async () => {
@@ -144,7 +142,7 @@ describe('MultipartWrapper', () => {
 				dest: "upload/test"
 			};
 			const multipart = new MultipartWrapper(options);
-			const fsSpy = sinon.spy(fs, 'mkdir');
+			const fsSpy = sinon.spy(fs.promises, 'mkdir');
 			await multipart.file(objectFieldname)(req);
 			expect(fsSpy.called).to.be.true;
 			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;
@@ -214,7 +212,7 @@ describe('MultipartWrapper', () => {
 				dest: "upload/test"
 			};
 			const multipart = new MultipartWrapper(options);
-			const fsSpy = sinon.spy(fs, 'mkdir');
+			const fsSpy = sinon.spy(fs.promises, 'mkdir');
 			await multipart.file(objectFieldname)(req);
 			expect(fsSpy.called).to.be.true;
 			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;
@@ -306,7 +304,7 @@ describe('MultipartWrapper', () => {
 				dest: "upload/test"
 			};
 			const multipart = new MultipartWrapper(options);
-			const fsSpy = sinon.spy(fs, 'mkdir');
+			const fsSpy = sinon.spy(fs.promises, 'mkdir');
 			await multipart.file(objectFieldname)(req);
 			expect(fsSpy.called).to.be.true;
 			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;
@@ -390,7 +388,7 @@ describe('MultipartWrapper', () => {
 				dest: "upload/test"
 			};
 			const multipart = new MultipartWrapper(options);
-			const fsSpy = sinon.spy(fs, 'mkdir');
+			const fsSpy = sinon.spy(fs.promises, 'mkdir');
 			await multipart.file(objectFieldname)(req);
 			expect(fsSpy.called).to.be.true;
 			expect(fsSpy.calledWith(options.dest, { recursive: true })).to.be.true;

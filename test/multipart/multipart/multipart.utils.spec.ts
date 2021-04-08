@@ -1,10 +1,12 @@
 import {
-	// BadRequestException,
+	BadRequestException,
 	HttpException,
-	// PayloadTooLargeException,
+	InternalServerErrorException,
+	NotAcceptableException,
+	PayloadTooLargeException,
 } from '@nestjs/common';
 import { expect } from 'chai';
-// import { multipartExceptions } from '../../../multipart/multipart/multipart.constants';
+import { multipartExceptions } from '../../../multipart/multipart/multipart.constants';
 import { transformException } from '../../../multipart/multipart/multipart.utils';
 
 describe('transformException', () => {
@@ -20,22 +22,61 @@ describe('transformException', () => {
 			expect(transformException(err)).to.be.eq(err);
 		});
 	});
-	// describe('if error exists and is not instance of HttpException', () => {
-	//   describe('and is LIMIT_FILE_SIZE exception', () => {
-	//     it('should return "PayloadTooLargeException"', () => {
-	//       const err = { message: multipartExceptions.LIMIT_FILE_SIZE };
-	//       expect(transformException(err as any)).to.be.instanceof(
-	//         PayloadTooLargeException,
-	//       );
-	//     });
-	//   });
-	//   describe('and is multipart exception but not a LIMIT_FILE_SIZE', () => {
-	//     it('should return "BadRequestException"', () => {
-	//       const err = { message: multipartExceptions.LIMIT_FIELD_KEY };
-	//       expect(transformException(err as any)).to.be.instanceof(
-	//         BadRequestException,
-	//       );
-	//     });
-	//   });
-	// });
+	describe('if error exists and is not instance of HttpException', () => {
+		describe('should return "NotAcceptableException"', () => {
+			it('is FST_INVALID_MULTIPART_CONTENT_TYPE exception', () => {
+				const err = { message: multipartExceptions.FST_INVALID_MULTIPART_CONTENT_TYPE };
+				expect(transformException(err as any)).to.be.instanceof(
+					NotAcceptableException,
+				);
+			});
+		});
+		describe('should return "PayloadTooLargeException"', () => {
+			it('is FST_PARTS_LIMIT exception', () => {
+				const err = { message: multipartExceptions.FST_PARTS_LIMIT };
+				expect(transformException(err as any)).to.be.instanceof(
+					PayloadTooLargeException,
+				);
+			});
+			it('is FST_FILES_LIMIT exception', () => {
+				const err = { message: multipartExceptions.FST_FILES_LIMIT };
+				expect(transformException(err as any)).to.be.instanceof(
+					PayloadTooLargeException,
+				);
+			});
+			it('is FST_FIELDS_LIMIT exception', () => {
+				const err = { message: multipartExceptions.FST_FIELDS_LIMIT };
+				expect(transformException(err as any)).to.be.instanceof(
+					PayloadTooLargeException,
+				);
+			});
+			it('is FST_REQ_FILE_TOO_LARGE exception', () => {
+				const err = { message: multipartExceptions.FST_REQ_FILE_TOO_LARGE };
+				expect(transformException(err as any)).to.be.instanceof(
+					PayloadTooLargeException,
+				);
+			});
+		});
+		describe('should return "BadRequestException"', () => {
+			it('is FST_PROTO_VIOLATION exception', () => {
+				const err = { message: multipartExceptions.FST_PROTO_VIOLATION };
+				expect(transformException(err as any)).to.be.instanceof(
+					BadRequestException,
+				);
+			});
+			it('is LIMIT_UNEXPECTED_FILE exception', () => {
+				const err = { message: multipartExceptions.LIMIT_UNEXPECTED_FILE };
+				expect(transformException(err as any)).to.be.instanceof(
+					BadRequestException,
+				);
+			});
+		});
+	});
+	describe('if error exists and is not fastify-multipart exception', () => {
+		it('should return "InternalServerErrorException"', () => {
+			expect(transformException(new Error())).to.be.instanceof(
+				InternalServerErrorException,
+			);
+		});
+	});
 });
