@@ -8,7 +8,7 @@ import { multipartExceptions } from './multipart.constants';
 type FastityRequest = any;
 
 export class MultipartWrapper {
-	public constructor(protected options: MultipartOptions) { }
+	public constructor(private options: MultipartOptions) { }
 
 	public file(fieldname: string) {
 		return async (req: FastityRequest): Promise<InterceptorFile | undefined> => {
@@ -19,7 +19,7 @@ export class MultipartWrapper {
 					if (Array.isArray(multipartFile)) {
 						multipartFile = multipartFile[0];
 					}
-					if (!multipartFile) return resolve(undefined);
+					if (!multipartFile) throw new Error(multipartExceptions.LIMIT_UNEXPECTED_FILE);
 					if (typeof this.options.fileFilter === 'function') {
 						let isFileAccepted = true;
 						this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
@@ -189,10 +189,11 @@ export class MultipartWrapper {
 		return new Promise((resolve, reject) => {
 			const multipartFile = { ...file } as InterceptorDiskFile;
 			const filename = multipartFile.filename;
-			const extension = path.extname(multipartFile.filename);
+			const extension = path.extname(filename);
+			const randomFileName = randomStringGenerator() + extension;
 			multipartFile.originalname = filename;
-			multipartFile.filename = randomStringGenerator() + extension;
-			const filePath = path.join(this.options.dest, multipartFile.filename);
+			multipartFile.filename = randomFileName;
+			const filePath = path.join(this.options.dest, randomFileName);
 			const outStream = fs.createWriteStream(filePath);
 			multipartFile.file.pipe(outStream);
 			outStream.on('error', (err) => {
