@@ -1,43 +1,24 @@
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import * as fs from 'fs';
-import path from 'path';
+import { filterAsyncGenerator } from '../utils';
+import * as path from 'path';
 import { InterceptorDiskFile, InterceptorFile, MultipartFile, MultipartOptions, UploadField } from '../interfaces';
-import { BaseMultipartWrapper } from './base-multipart-wrapper.interface';
 import { multipartExceptions } from './multipart.constants';
-
-async function* filterAsyncGenerator<T, TReturn = any, TNext = unknown>(
-	asyncGenerator: AsyncGenerator<T, TReturn, TNext>,
-	options: {
-		/** return true to add value into generator */
-		filter: (value: T) => boolean,
-		/** all value that returned false can be accessed here */
-		onValueNotAccepted?: (refusedValue: T) => void
-	}
-) {
-	const { filter, onValueNotAccepted } = options;
-	for await (const value of asyncGenerator) {
-		const isAccepted = filter(value);
-		if (!isAccepted) {
-			if (onValueNotAccepted) {
-				onValueNotAccepted(value);
-			}
-			continue;
-		}
-		yield value;
-	}
-}
 
 type FastityRequest = any;
 
-export class MultipartRequestWrapper implements BaseMultipartWrapper {
+export class MultipartRequestWrapper {
 	public constructor(protected options: MultipartOptions) { }
 
 	public file(fieldname: string) {
 		return async (req: FastityRequest): Promise<InterceptorFile | undefined> => {
 			return new Promise(async (resolve, reject) => {
 				try {
-					const fieldFile = await req.file(this.options);
-					const multipartFile = fieldFile[fieldname];
+					const reqFile: MultipartFile = await req.file(this.options);
+					let multipartFile = reqFile.fields[fieldname];
+					if (Array.isArray(multipartFile)) {
+						multipartFile = multipartFile[0];
+					}
 					if (!multipartFile) return resolve(undefined);
 					if (typeof this.options.fileFilter === 'function') {
 						this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
@@ -46,7 +27,9 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 						});
 					}
 					if (!this.options.dest) return resolve(multipartFile);
-					await fs.promises.mkdir(this.options.dest, { recursive: true });
+					if (!fs.existsSync(this.options.dest)) {
+						await fs.promises.mkdir(this.options.dest, { recursive: true });
+					}
 					const file = await this.writeFile(multipartFile);
 					return resolve(file);
 				} catch (err) {
@@ -89,7 +72,9 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 					});
 					for await (let multipartFile of filteredFileGenerator) {
 						if (options.dest) {
-							await fs.promises.mkdir(options.dest, { recursive: true });
+							if (!fs.existsSync(options.dest)) {
+								await fs.promises.mkdir(options.dest, { recursive: true });
+							}
 							multipartFile = await this.writeFile(multipartFile);
 						} else {
 							multipartFile.file.emit('end');
@@ -129,14 +114,16 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 					const files: InterceptorFile[] = [];
 					for await (let multipartFile of filteredFileGenerator) {
 						if (this.options.dest) {
-							await fs.promises.mkdir(this.options.dest, { recursive: true });
+							if (!fs.existsSync(this.options.dest)) {
+								await fs.promises.mkdir(this.options.dest, { recursive: true });
+							}
 							multipartFile = await this.writeFile(multipartFile);
 						} else {
 							multipartFile.file.emit('end');
 						}
 						files.push(multipartFile);
 					}
-					return resolve(files);
+					return resolve(files.length === 0 ? undefined : files);
 				} catch (err) {
 					return reject(err);
 				}
@@ -177,15 +164,13 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 							multipartFile.file.emit('end');
 						}
 					});
-					let isFirstIteration = true;
 					let fieldsObject: Record<string, InterceptorFile[]> | undefined;
 					for await (const multipartFile of filteredFileGenerator) {
 						const indexOfUploadField = uploadFieldKeys.indexOf(multipartFile.fieldname);
 						const field = uploadFields[indexOfUploadField];
 						let file: InterceptorFile = multipartFile as InterceptorFile;
 						if (this.options.dest) {
-							if (isFirstIteration) {
-								isFirstIteration = false;
+							if (!fs.existsSync(this.options.dest)) {
 								await fs.promises.mkdir(this.options.dest, { recursive: true });
 							}
 							file = await this.writeFile(multipartFile);
