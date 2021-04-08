@@ -1,22 +1,12 @@
 export async function* filterAsyncGenerator<T, TReturn = any, TNext = unknown>(
     asyncGenerator: AsyncGenerator<T, TReturn, TNext>,
-    options: {
-        /** return true to add value into generator */
-        filter: (value: T) => boolean,
-        /** all value that returned false can be accessed here */
-        onValueNotAccepted?: (refusedValue: T) => void
-    }
+    /** return true to add value into filtered generator */
+    filter: (value: T) => Promise<boolean>,
 ) {
-    const { filter, onValueNotAccepted } = options;
     const values: T[] = [];
     for await (const value of asyncGenerator) {
-        const isAccepted = filter(value);
-        if (!isAccepted) {
-            if (onValueNotAccepted) {
-                onValueNotAccepted(value);
-            }
-            continue;
-        }
+        const isAccepted = await filter(value);
+        if (!isAccepted) continue;
         values.push(value);
     }
     for (const value of values) {
