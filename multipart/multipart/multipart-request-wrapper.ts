@@ -1,8 +1,7 @@
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import * as fs from 'fs';
 import path from 'path';
-import { InterceptorDiskFile, InterceptorFile, MultipartFile } from '../interfaces/multipart-file.interface';
-import { MultipartOptions, UploadField } from '../interfaces/multipart-options.interface';
+import { InterceptorDiskFile, InterceptorFile, MultipartFile, MultipartOptions, UploadField } from '../interfaces';
 import { BaseMultipartWrapper } from './base-multipart-wrapper.interface';
 import { multipartExceptions } from './multipart.constants';
 
@@ -40,7 +39,7 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 					const fieldFile = await req.file(this.options);
 					const multipartFile = fieldFile[fieldname];
 					if (!multipartFile) return resolve(undefined);
-					if (this.options.fileFilter) {
+					if (typeof this.options.fileFilter === 'function') {
 						this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
 							if (err) return reject(err);
 							if (!acceptFile) return resolve(undefined);
@@ -74,7 +73,7 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 						filter: (multipartFile) => {
 							if (multipartFile.fieldname !== fieldname) return false;
 							if (!multipartFile) return false;
-							if (options.fileFilter) {
+							if (typeof options.fileFilter === 'function') {
 								let isFileAccepted = false;
 								options.fileFilter(req, multipartFile, (err, acceptFile) => {
 									if (err) throw err;
@@ -113,12 +112,15 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 					const filteredFileGenerator = filterAsyncGenerator<MultipartFile>(filesGenerator, {
 						filter: (multipartFile) => {
 							if (!multipartFile) return false;
-							let isFileAccepted = false;
-							this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
-								if (err) throw err;
-								isFileAccepted = acceptFile;
-							});
-							return isFileAccepted;
+							if (typeof this.options.fileFilter === 'function') {
+								let isFileAccepted = false;
+								this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
+									if (err) throw err;
+									isFileAccepted = acceptFile;
+								});
+								return isFileAccepted;
+							}
+							return true;
 						},
 						onValueNotAccepted: (multipartFile) => {
 							multipartFile.file.emit('end');
@@ -161,12 +163,15 @@ export class MultipartRequestWrapper implements BaseMultipartWrapper {
 							if (Array.isArray(allFilesInField) && allFilesInField.length > field.maxCount) {
 								throw new Error(multipartExceptions.FST_FILES_LIMIT);
 							}
-							let isFileAccepted = false;
-							this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
-								if (err) throw err;
-								isFileAccepted = acceptFile;
-							});
-							return isFileAccepted;
+							if (typeof this.options.fileFilter === 'function') {
+								let isFileAccepted = false;
+								this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
+									if (err) throw err;
+									isFileAccepted = acceptFile;
+								});
+								return isFileAccepted;
+							}
+							return true;
 						},
 						onValueNotAccepted: (multipartFile) => {
 							multipartFile.file.emit('end');

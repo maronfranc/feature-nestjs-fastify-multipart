@@ -1,10 +1,9 @@
-import * as fs from 'fs';
-import { MultipartOptions, UploadField } from "../interfaces/multipart-options.interface";
-import { InterceptorDiskFile, InterceptorFile, MultipartFile } from '../interfaces/multipart-file.interface';
-import { multipartExceptions } from './multipart.constants';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
-import { BaseMultipartWrapper } from './base-multipart-wrapper.interface';
+import * as fs from 'fs';
 import path from 'path';
+import { InterceptorDiskFile, InterceptorFile, MultipartFile, MultipartOptions, UploadField } from '../interfaces';
+import { BaseMultipartWrapper } from './base-multipart-wrapper.interface';
+import { multipartExceptions } from './multipart.constants';
 
 type FastityRequest = any;
 

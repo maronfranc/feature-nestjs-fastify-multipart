@@ -1,5 +1,4 @@
-import { InterceptorFile } from "../interfaces/multipart-file.interface";
-import { UploadField } from "../interfaces/multipart-options.interface";
+import { InterceptorFile, UploadField } from "../interfaces";
 
 export interface BaseMultipartWrapper {
     file: (fieldname: string) => (req: any) => Promise<InterceptorFile | undefined>;
