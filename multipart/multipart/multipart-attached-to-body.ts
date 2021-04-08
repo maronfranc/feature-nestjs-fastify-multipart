@@ -1,6 +1,6 @@
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import * as fs from 'fs';
-import path from 'path';
+import * as path from 'path';
 import { InterceptorDiskFile, InterceptorFile, MultipartFile, MultipartOptions, UploadField } from '../interfaces';
 import { BaseMultipartWrapper } from './base-multipart-wrapper.interface';
 import { multipartExceptions } from './multipart.constants';

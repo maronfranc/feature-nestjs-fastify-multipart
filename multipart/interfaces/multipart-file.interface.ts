@@ -4,7 +4,7 @@ export interface InterceptorDiskFile extends MultipartFile {
 }
 
 interface MultipartFields {
-    [x: string]: InterceptorDiskFile | InterceptorDiskFile[];
+    [x: string]: MultipartFile | MultipartFile[];
 }
 
 export interface MultipartFile {
