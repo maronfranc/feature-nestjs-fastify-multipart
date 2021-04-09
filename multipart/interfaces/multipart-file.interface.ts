@@ -1,13 +1,13 @@
 export interface InterceptorDiskFile extends MultipartFile {
-    originalname: string;
-    size: number;
+    path: string;
+    destination: string;
 }
 
 interface MultipartFields {
-    [x: string]: MultipartFile | MultipartFile[];
+    [x: string]: FastifyMultipartFile | FastifyMultipartFile[];
 }
 
-export interface MultipartFile {
+export interface FastifyMultipartFile {
     toBuffer: () => Promise<Buffer>;
     file: NodeJS.ReadStream;
     filepath: string;
@@ -17,6 +17,11 @@ export interface MultipartFile {
     mimetype: string;
     _buf?: Buffer;
     fields: MultipartFields;
+}
+
+export interface MultipartFile extends FastifyMultipartFile {
+    originalname: string;
+    size: number;
 }
 
 export type InterceptorFile = MultipartFile | InterceptorDiskFile;

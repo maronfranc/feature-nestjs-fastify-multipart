@@ -3,7 +3,7 @@ import { Observable } from 'rxjs';
 import { MULTIPART_MODULE_OPTIONS } from '../files.constants';
 import { transformException } from '../multipart/multipart.utils';
 import { MultipartOptions } from '../interfaces/multipart-options.interface';
-import { MultipartWrapper } from '../multipart';
+import { MultipartWrapper } from '../multipart/multipart-wrapper';
 
 export const AnyFilesInterceptor = (
 	localOptions?: MultipartOptions,

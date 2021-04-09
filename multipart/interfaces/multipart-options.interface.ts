@@ -1,4 +1,4 @@
-import { MultipartFile } from "./multipart-file.interface";
+import { FastifyMultipartFile, MultipartFile } from "./multipart-file.interface";
 
 export interface MultipartOptions {
     /** Destination folder, if not undefined uploaded file will be saved locally in dest path */
@@ -33,10 +33,10 @@ export interface MultipartOptions {
     defCharset?: string;
     /** If paths in the multipart 'filename' field shall be preserved. (Default: false) */
     preservePath?: boolean;
-
+    /** Function to control which files are accepted */
     fileFilter?(
         req: any,
-        file: MultipartFile,
+        file: FastifyMultipartFile,
         callback: (error: Error | null, acceptFile: boolean) => void,
     ): void;
 }

@@ -24,7 +24,7 @@ export function transformException(err: Error | undefined) {
 			return new BadRequestException(err.message);
 	}
 	if (err instanceof Error) {
-		throw new InternalServerErrorException(err.message);
+		return new InternalServerErrorException(err.message);
 	}
 	return err;
 }

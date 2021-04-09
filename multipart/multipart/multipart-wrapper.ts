@@ -1,7 +1,7 @@
-import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import * as fs from 'fs';
 import * as path from 'path';
-import { InterceptorDiskFile, InterceptorFile, MultipartFile, MultipartOptions, UploadField } from '../interfaces';
+import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
+import { FastifyMultipartFile, InterceptorDiskFile, InterceptorFile, MultipartFile, MultipartOptions, UploadField } from '../interfaces';
 import { filterAsyncGenerator } from '../utils';
 import { multipartExceptions } from './multipart.constants';
 
@@ -15,7 +15,7 @@ export class MultipartWrapper {
 			return new Promise(async (resolve, reject) => {
 				try {
 					const reqFile: MultipartFile = await req.file(this.options);
-					let multipartFile = reqFile.fields[fieldname];
+					let multipartFile = reqFile.fields[fieldname] as MultipartFile | MultipartFile[];
 					if (Array.isArray(multipartFile)) {
 						multipartFile = multipartFile[0];
 					}
@@ -28,7 +28,10 @@ export class MultipartWrapper {
 						});
 						if (!isFileAccepted) return resolve(undefined);
 					}
-					if (!this.options.dest) return resolve(multipartFile);
+					if (!this.options.dest) {
+						multipartFile = await this.endStream(multipartFile);
+						return resolve(multipartFile);
+					};
 					if (!fs.existsSync(this.options.dest)) {
 						await fs.promises.mkdir(this.options.dest, { recursive: true });
 					}
@@ -55,7 +58,7 @@ export class MultipartWrapper {
 				try {
 					const filesGenerator: AsyncGenerator<MultipartFile> = await req.files(options);
 					const filteredFileGenerator = filterAsyncGenerator<MultipartFile>(filesGenerator, async (multipartFile) => {
-						// emit end signalling that this iteration will not consume file stream
+						// emit 'end' signalling that this iteration will not consume file stream
 						multipartFile.file.emit('end');
 						if (multipartFile.fieldname !== fieldname) return false;
 						if (!multipartFile) return false;
@@ -75,7 +78,7 @@ export class MultipartWrapper {
 							}
 							multipartFile = await this.writeFile(multipartFile);
 						} else {
-							multipartFile.file.emit('end');
+							multipartFile = await this.endStream(multipartFile);
 						}
 						files.push(multipartFile);
 					}
@@ -93,18 +96,17 @@ export class MultipartWrapper {
 				try {
 					const filesGenerator: AsyncGenerator<MultipartFile> = await req.files(this.options);
 					const filteredFileGenerator = filterAsyncGenerator<MultipartFile>(filesGenerator, async (multipartFile) => {
-						// emit end signalling that this iteration will not consume file stream
+						// emit 'end' signalling that this iteration will not consume file stream
 						multipartFile.file.emit('end');
 						if (!multipartFile) return false;
+						let isFileAccepted = true;
 						if (typeof this.options.fileFilter === 'function') {
-							let isFileAccepted = false;
 							this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
 								if (err) throw err;
 								isFileAccepted = acceptFile;
 							});
-							return isFileAccepted;
 						}
-						return true;
+						return isFileAccepted;
 					});
 					const files: InterceptorFile[] = [];
 					for await (let multipartFile of filteredFileGenerator) {
@@ -114,11 +116,11 @@ export class MultipartWrapper {
 							}
 							multipartFile = await this.writeFile(multipartFile);
 						} else {
-							multipartFile.file.emit('end');
+							multipartFile = await this.endStream(multipartFile);
 						}
 						files.push(multipartFile);
 					}
-					return resolve(files);
+					return resolve(files.length === 0 ? undefined : files);
 				} catch (err) {
 					return reject(err);
 				}
@@ -133,41 +135,42 @@ export class MultipartWrapper {
 					const filesGenerator: AsyncGenerator<MultipartFile> = await req.files(this.options);
 					const uploadFieldKeys = uploadFields.map((uploadField) => uploadField.name);
 					const filteredFileGenerator = filterAsyncGenerator<MultipartFile>(filesGenerator, async (multipartFile) => {
-						// emit end signalling that this iteration will not consume file stream
+						// emit 'end' signalling that this iteration will not consume file stream
 						multipartFile.file.emit('end');
 						const indexOfUploadField = uploadFieldKeys.indexOf(multipartFile.fieldname);
 						if (indexOfUploadField === -1) {
 							throw new Error(multipartExceptions.LIMIT_UNEXPECTED_FILE);
 						};
 						const field = uploadFields[indexOfUploadField];
-						if (field.maxCount <= 0) return false;
 						if (multipartFile.fieldname !== field.name) return false;
+						if (field.maxCount <= 0) {
+							throw new Error(multipartExceptions.FST_FILES_LIMIT);
+						};
 						const allFilesInField = multipartFile.fields[field.name];
 						if (Array.isArray(allFilesInField) && allFilesInField.length > field.maxCount) {
 							throw new Error(multipartExceptions.FST_FILES_LIMIT);
 						}
+						let isFileAccepted = true;
 						if (typeof this.options.fileFilter === 'function') {
-							let isFileAccepted = false;
 							this.options.fileFilter(req, multipartFile, (err, acceptFile) => {
 								if (err) throw err;
 								isFileAccepted = acceptFile;
 							});
-							return isFileAccepted;
 						}
-						return true;
+						return isFileAccepted;
 					});
 					let fieldsObject: Record<string, InterceptorFile[]> | undefined;
-					for await (const multipartFile of filteredFileGenerator) {
-						const indexOfUploadField = uploadFieldKeys.indexOf(multipartFile.fieldname);
+					for await (const file of filteredFileGenerator) {
+						const indexOfUploadField = uploadFieldKeys.indexOf(file.fieldname);
 						const field = uploadFields[indexOfUploadField];
-						let file: InterceptorFile = multipartFile as InterceptorFile;
+						let multipartFile: InterceptorFile = file as InterceptorFile;
 						if (this.options.dest) {
 							if (!fs.existsSync(this.options.dest)) {
 								await fs.promises.mkdir(this.options.dest, { recursive: true });
 							}
-							file = await this.writeFile(multipartFile);
+							multipartFile = await this.writeFile(file);
 						} else {
-							multipartFile.file.emit('end');
+							multipartFile = await this.endStream(multipartFile);
 						}
 						if (!fieldsObject) {
 							fieldsObject = Object.create(null);
@@ -175,7 +178,7 @@ export class MultipartWrapper {
 						if (!fieldsObject[field.name]) {
 							fieldsObject[field.name] = [];
 						}
-						fieldsObject[field.name].push(file);
+						fieldsObject[field.name].push(multipartFile);
 					}
 					return resolve(fieldsObject);
 				} catch (err) {
@@ -193,7 +196,9 @@ export class MultipartWrapper {
 			const randomFileName = randomStringGenerator() + extension;
 			multipartFile.originalname = filename;
 			multipartFile.filename = randomFileName;
+			multipartFile.destination = this.options.dest;
 			const filePath = path.join(this.options.dest, randomFileName);
+			multipartFile.destination = filePath;
 			const outStream = fs.createWriteStream(filePath);
 			multipartFile.file.pipe(outStream);
 			outStream.on('error', (err) => {
@@ -205,5 +210,13 @@ export class MultipartWrapper {
 				return resolve(multipartFile);
 			});
 		});
+	}
+
+	private async endStream(file: FastifyMultipartFile): Promise<MultipartFile> {
+		file.file.emit('end');
+		const multipartFile = { ...file } as MultipartFile;
+		multipartFile.size = multipartFile.file.readableLength;
+		multipartFile.originalname = multipartFile.filename;
+		return multipartFile;
 	}
 }
