@@ -122,11 +122,10 @@ describe('MultipartWrapper', () => {
 		});
 		describe("on error", () => {
 			it('should call multipartFile.file.destroy()', async () => {
-				const bytesWritten = 1234;
 				(fs as any).createWriteStream = (path: string) => {
 					const mockCreateWriteStream = new PassThrough();
 					mockCreateWriteStream.on('data', () => {
-						mockCreateWriteStream.emit('error');
+						mockCreateWriteStream.emit('end');
 					});
 					mockCreateWriteStream.on('end', () => {
 						mockCreateWriteStream.emit('error');
@@ -144,31 +143,6 @@ describe('MultipartWrapper', () => {
 				} catch (error) { }
 				expect(destroyStub.called).to.be.true;
 			});
-			// it('should emit error', async () => {
-			// 	const bytesWritten = 1234;
-			// 	(fs as any).createWriteStream = (path: string) => {
-			// 		const mockCreateWriteStream = new PassThrough();
-			// 		mockCreateWriteStream.on('data', () => {
-			// 			mockCreateWriteStream.emit('error');
-			// 		});
-			// 		mockCreateWriteStream.on('end', () => {
-			// 			mockCreateWriteStream.emit('error');
-			// 		});
-			// 		return mockCreateWriteStream;
-			// 	};
-			// 	const options: MultipartOptions = {
-			// 		dest: 'upload/test'
-			// 	};
-			// 	const multipart = new MultipartWrapper(options);
-			// 	fileObject.file.destroy = () => { };
-			// 	const destroyStub = sinon.stub(fileObject.file, 'destroy');
-			// 	// expect((multipart as any).writeFile(fileObject)).to.eventually.
-			// 	// return expect(multipart.file(objectFieldname)(req)).to.be.rejected.and.to.eventually.equal(newHttpError);
-			// 	try {
-			// 		const file = await (multipart as any).writeFile(fileObject);
-			// 	} catch (error) { }
-			// 	expect(destroyStub.called).to.be.true;
-			// });
 		});
 	});
 	describe('file', () => {
@@ -491,25 +465,23 @@ describe('MultipartWrapper', () => {
 			it('should throw exception if files exceed maxCount', async () => {
 				const multipart = new MultipartWrapper({});
 				const maxCount = filesArray.length - 1;
-				try {
-					await multipart.fileFields([
-						{ name: arrayFieldname, maxCount },
-						{ name: objectFieldname, maxCount: 1 },
-					])(req)
-				} catch (err) {
-					expect(err.message).to.equal(multipartExceptions.FST_FILES_LIMIT);
-				}
+				return expect(multipart.fileFields([
+					{ name: arrayFieldname, maxCount },
+					{ name: objectFieldname, maxCount: 1 },
+				])(req))
+					.to.be.rejected.and
+					.to.eventually.have.property('message')
+					.that.is.equal(multipartExceptions.FST_FILES_LIMIT);
 			});
 			it('should throw exception if maxCount is zero or negative', async () => {
 				const multipart = new MultipartWrapper({});
-				try {
-					await multipart.fileFields([
-						{ name: arrayFieldname, maxCount: 0 },
-						{ name: objectFieldname, maxCount: -1 },
-					])(req)
-				} catch (err) {
-					expect(err.message).to.equal(multipartExceptions.LIMIT_UNEXPECTED_FILE);
-				}
+				return expect(multipart.fileFields([
+					{ name: arrayFieldname, maxCount: 0 },
+					{ name: objectFieldname, maxCount: -1 },
+				])(req))
+					.to.be.rejected.and
+					.to.eventually.have.property('message')
+					.that.is.equal(multipartExceptions.FST_FILES_LIMIT);
 			});
 		});
 		describe('options', () => {
