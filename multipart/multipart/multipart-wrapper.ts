@@ -183,7 +183,7 @@ export class MultipartWrapper {
               }
               const field = uploadFields[indexOfUploadField];
               if (multipartFile.fieldname !== field.name) return false;
-              if (field.maxCount <= 0) {
+              if (!field.maxCount || field.maxCount <= 0) {
                 throw new Error(multipartExceptions.FST_FILES_LIMIT);
               }
               const allFilesInField = multipartFile.fields[field.name];
