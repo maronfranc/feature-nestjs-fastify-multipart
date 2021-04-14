@@ -1,6 +1,5 @@
 export async function* filterAsyncGenerator<T, TReturn = any, TNext = unknown>(
   asyncGenerator: AsyncGenerator<T, TReturn, TNext>,
-  /** return true to add value into filtered generator */
   filter: (value: T) => Promise<boolean>,
 ) {
   const values: T[] = [];

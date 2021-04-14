@@ -12,15 +12,11 @@ import {
 import { filterAsyncGenerator } from '../utils';
 import { multipartExceptions } from './multipart.constants';
 
-type FastityRequest = any;
-
 export class MultipartWrapper {
   public constructor(private options: MultipartOptions) {}
 
   public file(fieldname: string) {
-    return async (
-      req: FastityRequest,
-    ): Promise<InterceptorFile | undefined> => {
+    return async (req: any): Promise<InterceptorFile | undefined> => {
       return new Promise(async (resolve, reject) => {
         try {
           const reqFile: MultipartFile = await req.file(this.options);
@@ -57,9 +53,7 @@ export class MultipartWrapper {
   }
 
   public files(fieldname: string, maxCount?: number) {
-    return async (
-      req: FastityRequest,
-    ): Promise<InterceptorFile[] | undefined> => {
+    return async (req: any): Promise<InterceptorFile[] | undefined> => {
       return new Promise(async (resolve, reject) => {
         const options = { ...this.options };
         if (maxCount) {
@@ -110,9 +104,7 @@ export class MultipartWrapper {
   }
 
   public any() {
-    return async (
-      req: FastityRequest,
-    ): Promise<InterceptorFile[] | undefined> => {
+    return async (req: any): Promise<InterceptorFile[] | undefined> => {
       return new Promise(async (resolve, reject) => {
         try {
           const filesGenerator: AsyncGenerator<MultipartFile> = await req.files(
@@ -160,7 +152,7 @@ export class MultipartWrapper {
 
   public fileFields(uploadFields: UploadField[]) {
     return async (
-      req: FastityRequest,
+      req: any,
     ): Promise<Record<string, InterceptorFile[]> | undefined> => {
       return new Promise(async (resolve, reject) => {
         try {
@@ -260,9 +252,11 @@ export class MultipartWrapper {
     });
   }
 
-  private async endStream(file: FastifyMultipartFile): Promise<MultipartFile> {
-    file.file.emit('end');
-    const multipartFile = { ...file } as MultipartFile;
+  private async endStream(
+    fastifyMultipart: FastifyMultipartFile,
+  ): Promise<MultipartFile> {
+    fastifyMultipart.file.emit('end');
+    const multipartFile = { ...fastifyMultipart } as MultipartFile;
     multipartFile.size = multipartFile.file.readableLength;
     multipartFile.originalname = multipartFile.filename;
     return multipartFile;
