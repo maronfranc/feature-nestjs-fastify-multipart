@@ -2,30 +2,16 @@ import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as path from 'path';
 import { expect } from 'chai';
-import * as chai from 'chai';
 import { MultipartOptions } from '../../../multipart/interfaces/multipart-options.interface';
 import { MultipartWrapper } from '../../../multipart/multipart/multipart-wrapper';
 import { Readable, PassThrough } from 'stream';
-import {
-  InterceptorFile,
-  MultipartFile,
-} from '../../../multipart/interfaces/multipart-file.interface';
+import { InterceptorFile } from '../../../multipart/interfaces/multipart-file.interface';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { multipartExceptions } from '../../../multipart/multipart/multipart.constants';
 
-chai.use(require('chai-as-promised'));
-
 describe('MultipartWrapper', () => {
-  before(() => {
-    sinon.createSandbox();
-  });
-  after(() => {
-    sinon.restore();
-  });
-
   let fileObject: any = {};
   let filesArray: any[] = [];
-  // let multipartFiles: any = {};
   let req: any = {};
   const objectFieldname = 'single-file-fieldname';
   const arrayFieldname = 'array-files-fieldname';
@@ -75,12 +61,6 @@ describe('MultipartWrapper', () => {
     for (const file of filesArray) {
       file.fields[arrayFieldname] = filesArray;
     }
-    // multipartFiles = {
-    // 	fields: {
-    // 		[arrayFieldname]: filesArray,
-    // 		[objectFieldname]: fileObject
-    // 	},
-    // }
     req = {
       file: async (options: MultipartOptions) => fileObject,
       files: async (options: MultipartOptions) => getMultipartIterator(),
@@ -548,7 +528,9 @@ describe('MultipartWrapper', () => {
             { name: arrayFieldname, maxCount: 10 },
             { name: objectFieldname, maxCount: 10 },
           ])(req);
-          expect(filesRecord[arrayFieldname]).to.not.have.members([fileToFilter]);
+          expect(filesRecord[arrayFieldname]).to.not.have.members([
+            fileToFilter,
+          ]);
           expect(filesRecord[objectFieldname]).to.be.undefined;
         });
         it('should throw error if options.fileFilter callback is (Error, Boolean)', async () => {

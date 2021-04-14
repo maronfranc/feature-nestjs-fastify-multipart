@@ -3,50 +3,52 @@ import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-hos
 import { expect } from 'chai';
 import { of } from 'rxjs';
 import * as sinon from 'sinon';
-import { FilesInterceptor } from '../../../multipart/interceptors/files.interceptor';
+import { FileFieldsInterceptor } from '../../../multipart/interceptors/file-fields.interceptor';
+import { UploadField } from '../../../multipart/interfaces';
 
-describe('FilesInterceptor', () => {
+describe('FileFieldsInterceptor', () => {
+  const uploadFields: UploadField[] = [
+    { name: "field", maxCount: 10 }
+  ]
   it('should return metatype with expected structure', async () => {
-    const targetClass = FilesInterceptor('files');
+    const targetClass = FileFieldsInterceptor(uploadFields);
     expect(targetClass.prototype.intercept).to.not.be.undefined;
   });
   describe('intercept', () => {
     let handler: CallHandler;
     let context = new ExecutionContextHost([]);
-    const fieldName = 'files';
     beforeEach(() => {
       handler = {
         handle: () => of('test'),
       };
-      context.switchToHttp = () =>
-      ({
+      context.switchToHttp = () => ({
         getRequest: () => {
           return {
             file: () => () => { },
             files: () => () => { },
-          };
+          }
         },
-      } as any);
+      }) as any;
     });
-    it('should call files() with expected params', async () => {
-      const maxCount = 10;
-      const target = new (FilesInterceptor(fieldName, maxCount))();
+    it('should call fileFields() with expected params', async () => {
+      const target = new (FileFieldsInterceptor(uploadFields))();
       const callback = () => { };
-      const filesSpy = sinon
-        .stub((target as any).multipart, 'files')
+      const arraySpy = sinon
+        .stub((target as any).multipart, 'fileFields')
         .returns(callback);
+
       await target.intercept(context, handler);
-      expect(filesSpy.called).to.be.true;
-      expect(filesSpy.calledWith(fieldName, maxCount)).to.be.true;
+
+      expect(arraySpy.called).to.be.true;
+      expect(arraySpy.calledWith()).to.be.true;
     });
     it('should transform exception', async () => {
-      const fieldName = 'file';
-      const target = new (FilesInterceptor(fieldName))();
+      const target = new (FileFieldsInterceptor(uploadFields))();
       const callback = () => { };
       (target as any).multipart = {
-        files: () => callback,
+        any: () => callback,
       };
-      (target.intercept(new ExecutionContextHost([]), handler) as any).catch(
+      (target.intercept(context, handler) as any).catch(
         error => expect(error).to.not.be.undefined,
       );
     });
