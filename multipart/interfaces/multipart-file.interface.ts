@@ -15,7 +15,6 @@ export interface FastifyMultipartFile {
   filename: string;
   encoding: string;
   mimetype: string;
-  _buf?: Buffer;
   fields: MultipartFields;
 }
 

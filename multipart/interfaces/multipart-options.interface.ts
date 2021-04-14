@@ -40,7 +40,7 @@ export interface MultipartOptions {
   fileFilter?(
     req: any,
     file: FastifyMultipartFile,
-    callback: (error: Error | null, acceptFile: boolean) => void,
+    callback: (error: Error | null, acceptFile?: boolean) => void,
   ): void;
 }
 
