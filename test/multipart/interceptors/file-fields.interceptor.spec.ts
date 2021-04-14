@@ -14,7 +14,7 @@ describe('FileFieldsInterceptor', () => {
   });
   describe('intercept', () => {
     let handler: CallHandler;
-    let context = new ExecutionContextHost([]);
+    const context = new ExecutionContextHost([]);
     beforeEach(() => {
       handler = {
         handle: () => of('test'),

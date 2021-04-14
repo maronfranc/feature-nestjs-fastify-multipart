@@ -12,7 +12,7 @@ describe('FilesInterceptor', () => {
   });
   describe('intercept', () => {
     let handler: CallHandler;
-    let context = new ExecutionContextHost([]);
+    const context = new ExecutionContextHost([]);
     const fieldName = 'files';
     beforeEach(() => {
       handler = {

@@ -27,7 +27,7 @@ describe('MultipartWrapper', () => {
   }
 
   beforeEach(() => {
-    (fs as any).promises.mkdir = (path: string, options: any) => { };
+    (fs as any).promises.mkdir = (path: string, options: any) => {};
     (fs as any).createWriteStream = (path: string) => new PassThrough();
     (fs as any).existsSync = (path: string) => false;
     filesArray = [
@@ -117,11 +117,11 @@ describe('MultipartWrapper', () => {
           dest: 'upload/test',
         };
         const multipart = new MultipartWrapper(options);
-        fileObject.file.destroy = () => { };
+        fileObject.file.destroy = () => {};
         const destroyStub = sinon.stub(fileObject.file, 'destroy');
         try {
           await (multipart as any).writeFile(fileObject);
-        } catch (error) { }
+        } catch (error) {}
         expect(destroyStub.called).to.be.true;
       });
     });
