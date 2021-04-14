@@ -126,6 +126,21 @@ describe('MultipartWrapper', () => {
       });
     });
   });
+  describe('endStream', () => {
+    it('should emit file end', async () => {
+      const multipart = new MultipartWrapper({});
+      const fileEmitStub = sinon.stub(fileObject.file, 'emit');
+      await (multipart as any).endStream(fileObject);
+      expect(fileEmitStub.called).to.be.true;
+      expect(fileEmitStub.calledWith('end')).to.be.true;
+    });
+    it('should return file with originalname and size', async () => {
+      const multipart = new MultipartWrapper({});
+      const file = await (multipart as any).endStream(fileObject);
+      expect(file.originalname).to.equal(fileObject.filename);
+      expect(file.size).to.be.equal(fileObject.file.readableLength);
+    });
+  });
   describe('file', () => {
     it('should call file() with expected params', async () => {
       const multipart = new MultipartWrapper({});

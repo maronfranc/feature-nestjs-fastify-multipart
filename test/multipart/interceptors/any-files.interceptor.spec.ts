@@ -17,18 +17,19 @@ describe('AnyFilesInterceptor', () => {
       handler = {
         handle: () => of('test'),
       };
-      context.switchToHttp = () => ({
-        getRequest: () => {
-          return {
-            file: () => () => { },
-            files: () => () => { },
-          }
-        },
-      }) as any;
+      context.switchToHttp = () =>
+        ({
+          getRequest: () => {
+            return {
+              file: () => () => {},
+              files: () => () => {},
+            };
+          },
+        } as any);
     });
     it('should call any() with expected params', async () => {
       const target = new (AnyFilesInterceptor())();
-      const callback = () => { };
+      const callback = () => {};
       const arraySpy = sinon
         .stub((target as any).multipart, 'any')
         .returns(callback);
@@ -40,7 +41,7 @@ describe('AnyFilesInterceptor', () => {
     });
     it('should transform exception', async () => {
       const target = new (AnyFilesInterceptor())();
-      const callback = () => { };
+      const callback = () => {};
       (target as any).multipart = {
         any: () => callback,
       };

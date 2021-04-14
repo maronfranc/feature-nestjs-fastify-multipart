@@ -7,9 +7,7 @@ import { FileFieldsInterceptor } from '../../../multipart/interceptors/file-fiel
 import { UploadField } from '../../../multipart/interfaces';
 
 describe('FileFieldsInterceptor', () => {
-  const uploadFields: UploadField[] = [
-    { name: "field", maxCount: 10 }
-  ]
+  const uploadFields: UploadField[] = [{ name: 'field', maxCount: 10 }];
   it('should return metatype with expected structure', async () => {
     const targetClass = FileFieldsInterceptor(uploadFields);
     expect(targetClass.prototype.intercept).to.not.be.undefined;
@@ -21,18 +19,19 @@ describe('FileFieldsInterceptor', () => {
       handler = {
         handle: () => of('test'),
       };
-      context.switchToHttp = () => ({
-        getRequest: () => {
-          return {
-            file: () => () => { },
-            files: () => () => { },
-          }
-        },
-      }) as any;
+      context.switchToHttp = () =>
+        ({
+          getRequest: () => {
+            return {
+              file: () => () => {},
+              files: () => () => {},
+            };
+          },
+        } as any);
     });
     it('should call fileFields() with expected params', async () => {
       const target = new (FileFieldsInterceptor(uploadFields))();
-      const callback = () => { };
+      const callback = () => {};
       const arraySpy = sinon
         .stub((target as any).multipart, 'fileFields')
         .returns(callback);
@@ -44,7 +43,7 @@ describe('FileFieldsInterceptor', () => {
     });
     it('should transform exception', async () => {
       const target = new (FileFieldsInterceptor(uploadFields))();
-      const callback = () => { };
+      const callback = () => {};
       (target as any).multipart = {
         any: () => callback,
       };

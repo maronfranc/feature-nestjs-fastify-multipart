@@ -19,19 +19,19 @@ describe('FilesInterceptor', () => {
         handle: () => of('test'),
       };
       context.switchToHttp = () =>
-      ({
-        getRequest: () => {
-          return {
-            file: () => () => { },
-            files: () => () => { },
-          };
-        },
-      } as any);
+        ({
+          getRequest: () => {
+            return {
+              file: () => () => {},
+              files: () => () => {},
+            };
+          },
+        } as any);
     });
     it('should call files() with expected params', async () => {
       const maxCount = 10;
       const target = new (FilesInterceptor(fieldName, maxCount))();
-      const callback = () => { };
+      const callback = () => {};
       const filesSpy = sinon
         .stub((target as any).multipart, 'files')
         .returns(callback);
@@ -42,7 +42,7 @@ describe('FilesInterceptor', () => {
     it('should transform exception', async () => {
       const fieldName = 'file';
       const target = new (FilesInterceptor(fieldName))();
-      const callback = () => { };
+      const callback = () => {};
       (target as any).multipart = {
         files: () => callback,
       };

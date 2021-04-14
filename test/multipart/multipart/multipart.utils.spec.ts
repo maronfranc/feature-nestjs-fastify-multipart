@@ -24,7 +24,7 @@ describe('transformException', () => {
   });
   describe('if error exists and is not instance of HttpException', () => {
     describe('should return "NotAcceptableException"', () => {
-      it('if it is FST_INVALID_MULTIPART_CONTENT_TYPE exception', () => {
+      it('if is FST_INVALID_MULTIPART_CONTENT_TYPE exception', () => {
         const err = {
           message: multipartExceptions.FST_INVALID_MULTIPART_CONTENT_TYPE,
         };
@@ -34,25 +34,25 @@ describe('transformException', () => {
       });
     });
     describe('should return "PayloadTooLargeException"', () => {
-      it('if it is FST_PARTS_LIMIT exception', () => {
+      it('if is FST_PARTS_LIMIT exception', () => {
         const err = { message: multipartExceptions.FST_PARTS_LIMIT };
         expect(transformException(err as any)).to.be.instanceof(
           PayloadTooLargeException,
         );
       });
-      it('if it is FST_FILES_LIMIT exception', () => {
+      it('if is FST_FILES_LIMIT exception', () => {
         const err = { message: multipartExceptions.FST_FILES_LIMIT };
         expect(transformException(err as any)).to.be.instanceof(
           PayloadTooLargeException,
         );
       });
-      it('if it is FST_FIELDS_LIMIT exception', () => {
+      it('if is FST_FIELDS_LIMIT exception', () => {
         const err = { message: multipartExceptions.FST_FIELDS_LIMIT };
         expect(transformException(err as any)).to.be.instanceof(
           PayloadTooLargeException,
         );
       });
-      it('if it is FST_REQ_FILE_TOO_LARGE exception', () => {
+      it('if is FST_REQ_FILE_TOO_LARGE exception', () => {
         const err = { message: multipartExceptions.FST_REQ_FILE_TOO_LARGE };
         expect(transformException(err as any)).to.be.instanceof(
           PayloadTooLargeException,
@@ -60,13 +60,13 @@ describe('transformException', () => {
       });
     });
     describe('should return "BadRequestException"', () => {
-      it('if it is FST_PROTO_VIOLATION exception', () => {
+      it('if is FST_PROTO_VIOLATION exception', () => {
         const err = { message: multipartExceptions.FST_PROTO_VIOLATION };
         expect(transformException(err as any)).to.be.instanceof(
           BadRequestException,
         );
       });
-      it('if it is LIMIT_UNEXPECTED_FILE exception', () => {
+      it('if is LIMIT_UNEXPECTED_FILE exception', () => {
         const err = { message: multipartExceptions.LIMIT_UNEXPECTED_FILE };
         expect(transformException(err as any)).to.be.instanceof(
           BadRequestException,
