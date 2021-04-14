@@ -238,7 +238,7 @@ export class MultipartWrapper {
       multipartFile.filename = randomFileName;
       multipartFile.destination = this.options.dest;
       const filePath = path.join(this.options.dest, randomFileName);
-      multipartFile.destination = filePath;
+      multipartFile.path = filePath;
       const outStream = fs.createWriteStream(filePath);
       multipartFile.file.pipe(outStream);
       outStream.on('error', err => {

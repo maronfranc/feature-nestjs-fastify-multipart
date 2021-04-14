@@ -87,6 +87,16 @@ describe('MultipartWrapper', () => {
       expect(file.originalname).to.equal(fileObject.filename);
       expect(file.filename).to.not.equal(fileObject.filename);
     });
+    it('should add destination and path', async () => {
+      const options: MultipartOptions = {
+        dest: 'upload/test',
+      };
+      const multipart = new MultipartWrapper(options);
+      const file = await (multipart as any).writeFile(fileObject);
+      const filePath = path.join(options.dest, file.filename);
+      expect(file.path).to.equal(filePath);
+      expect(file.destination).to.equal(options.dest);
+    });
     it('should add bytesWritten number to file.size', async () => {
       const options: MultipartOptions = {
         dest: 'upload/test',
@@ -94,9 +104,9 @@ describe('MultipartWrapper', () => {
       const multipart = new MultipartWrapper(options);
       const bytesWritten = 1234;
       (fs as any).createWriteStream = (path: string) => {
-        const mockCreateWriteStream = new PassThrough();
-        (mockCreateWriteStream as any).bytesWritten = bytesWritten;
-        return mockCreateWriteStream;
+        const writeStream = new PassThrough();
+        (writeStream as any).bytesWritten = bytesWritten;
+        return writeStream;
       };
       const file = await (multipart as any).writeFile(fileObject);
       expect(file.size).to.be.equal(bytesWritten);
@@ -104,14 +114,14 @@ describe('MultipartWrapper', () => {
     describe('on error', () => {
       it('should call multipartFile.file.destroy()', async () => {
         (fs as any).createWriteStream = (path: string) => {
-          const mockCreateWriteStream = new PassThrough();
-          mockCreateWriteStream.on('data', () => {
-            mockCreateWriteStream.emit('end');
+          const writeStream = new PassThrough();
+          writeStream.on('data', () => {
+            writeStream.emit('end');
           });
-          mockCreateWriteStream.on('end', () => {
-            mockCreateWriteStream.emit('error');
+          writeStream.on('end', () => {
+            writeStream.emit('error');
           });
-          return mockCreateWriteStream;
+          return writeStream;
         };
         const options: MultipartOptions = {
           dest: 'upload/test',
