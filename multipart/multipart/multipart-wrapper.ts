@@ -3,7 +3,7 @@ import * as path from 'path';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import {
   FastifyMultipartFile,
-  InterceptorDiskFile,
+  MultipartDiskFile,
   InterceptorFile,
   MultipartFile,
   MultipartOptions,
@@ -203,7 +203,7 @@ export class MultipartWrapper {
           for await (const file of filteredFileGenerator) {
             const indexOfUploadField = uploadFieldKeys.indexOf(file.fieldname);
             const field = uploadFields[indexOfUploadField];
-            let multipartFile: InterceptorFile = file as InterceptorFile;
+            let multipartFile = file as InterceptorFile;
             if (this.options.dest) {
               if (!fs.existsSync(this.options.dest)) {
                 await fs.promises.mkdir(this.options.dest, { recursive: true });
@@ -228,9 +228,9 @@ export class MultipartWrapper {
     };
   }
 
-  private async writeFile(file: MultipartFile): Promise<InterceptorDiskFile> {
+  private async writeFile(file: MultipartFile): Promise<MultipartDiskFile> {
     return new Promise((resolve, reject) => {
-      const multipartFile = { ...file } as InterceptorDiskFile;
+      const multipartFile = { ...file } as MultipartDiskFile;
       const filename = multipartFile.filename;
       const extension = path.extname(filename);
       const randomFileName = randomStringGenerator() + extension;

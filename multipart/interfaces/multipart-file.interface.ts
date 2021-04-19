@@ -1,4 +1,4 @@
-export interface InterceptorDiskFile extends MultipartFile {
+export interface MultipartDiskFile extends MultipartFile {
   path: string;
   destination: string;
 }
@@ -23,4 +23,4 @@ export interface MultipartFile extends FastifyMultipartFile {
   size: number;
 }
 
-export type InterceptorFile = MultipartFile | InterceptorDiskFile;
+export type InterceptorFile = MultipartFile | MultipartDiskFile;
