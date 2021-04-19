@@ -9,12 +9,11 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { MULTIPART_MODULE_OPTIONS } from '../files.constants';
-import { transformException } from '../multipart/multipart.utils';
 import {
   MultipartOptions,
   UploadField,
 } from '../interfaces/multipart-options.interface';
-import { MultipartWrapper } from '../multipart';
+import { MultipartWrapper, transformException } from '../multipart';
 
 export const FileFieldsInterceptor = (
   uploadFields: UploadField[],

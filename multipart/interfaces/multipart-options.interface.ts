@@ -1,7 +1,4 @@
-import {
-  FastifyMultipartFile,
-  MultipartFile,
-} from './multipart-file.interface';
+import { FastifyMultipartFile } from './multipart-file.interface';
 
 export interface MultipartOptions {
   /** Destination folder, if not undefined uploaded file will be saved locally in dest path */

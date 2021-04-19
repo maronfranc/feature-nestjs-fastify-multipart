@@ -1,0 +1,1 @@
+export declare const MULTIPART_MODULE_ID = "MULTIPART_MODULE_ID";
