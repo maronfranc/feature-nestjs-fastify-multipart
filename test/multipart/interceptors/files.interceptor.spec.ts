@@ -1,8 +1,8 @@
-import { CallHandler } from '@nestjs/common';
-import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { expect } from 'chai';
 import { of } from 'rxjs';
 import * as sinon from 'sinon';
+import { CallHandler } from '@nestjs/common';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { FilesInterceptor } from '../../../multipart/interceptors/files.interceptor';
 
 describe('FilesInterceptor', () => {

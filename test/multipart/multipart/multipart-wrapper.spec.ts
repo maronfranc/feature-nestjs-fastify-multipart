@@ -2,11 +2,11 @@ import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as path from 'path';
 import { expect } from 'chai';
+import { Readable, PassThrough } from 'stream';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { MultipartOptions } from '../../../multipart/interfaces/multipart-options.interface';
 import { MultipartWrapper } from '../../../multipart/multipart/multipart-wrapper';
-import { Readable, PassThrough } from 'stream';
 import { InterceptorFile } from '../../../multipart/interfaces/multipart-file.interface';
-import { HttpException, HttpStatus } from '@nestjs/common';
 import { multipartExceptions } from '../../../multipart/multipart/multipart.constants';
 
 describe('MultipartWrapper', () => {
