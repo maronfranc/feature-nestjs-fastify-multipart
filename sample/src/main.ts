@@ -1,15 +1,21 @@
 import { NestFactory } from '@nestjs/core';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const fastifyAdapter = new FastifyAdapter({
-    logger: true
+    logger: true,
   });
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  fastifyAdapter.register(require("fastify-multipart"));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  fastifyAdapter.register(require('fastify-multipart'));
 
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, fastifyAdapter);
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    fastifyAdapter,
+  );
 
   await app.listen(3000);
 }
