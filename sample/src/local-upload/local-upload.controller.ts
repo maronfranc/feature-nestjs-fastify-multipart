@@ -8,17 +8,15 @@ import {
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FastifyRequest } from 'fastify';
-// feature folder interfaces. Run 'install-file-interceptor' script
 import {
   AnyFilesInterceptor,
+  FastifyMultipartFile,
   FileFieldsInterceptor,
   FileInterceptor,
   FilesInterceptor,
-  FastifyMultipartFile,
   MultipartDiskFile,
 } from '@nestjs/platform-fastify/multipart';
-
+import { FastifyRequest } from 'fastify';
 import {
   MIMETYPES_APPLICATION,
   MIMETYPES_IMAGE,
@@ -40,7 +38,8 @@ export class LocalUploadController {
       ) => {
         const applicationMimeTypes: string[] = [...MIMETYPES_APPLICATION];
         if (applicationMimeTypes.includes(file.mimetype)) {
-          return cb(new BadRequestException('exception sample'));
+          const typesList = applicationMimeTypes.join(',');
+          return cb(new BadRequestException(`file extension not listed in (${typesList})`));
         }
         cb(null, true);
       },
@@ -64,7 +63,8 @@ export class LocalUploadController {
       ) => {
         const applicationMimeTypes: string[] = [...MIMETYPES_APPLICATION];
         if (applicationMimeTypes.includes(file.mimetype)) {
-          return cb(new BadRequestException('exception sample'));
+          const typesList = applicationMimeTypes.join(',');
+          return cb(new BadRequestException(`file extension not listed in (${typesList})`));
         }
         cb(null, true);
       },

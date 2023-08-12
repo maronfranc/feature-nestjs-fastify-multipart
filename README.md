@@ -7,7 +7,7 @@ Nestjs `FileInterceptors` code in Typescript using `fastify-multipart`. [Pull re
 ```
 cd sample
 # install node_modules and copy ../multipart/dist folder into node_modules
-npm run install-file-interceptor
+npm install
 ```
 
 ### Start

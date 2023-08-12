@@ -8,29 +8,27 @@ import {
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FastifyRequest } from 'fastify';
-// feature folder interfaces. Run 'install-file-interceptor' script
 import {
   AnyFilesInterceptor,
+  FastifyMultipartFile,
   FileFieldsInterceptor,
   FileInterceptor,
   FilesInterceptor,
-  FastifyMultipartFile,
   MultipartFile,
 } from '@nestjs/platform-fastify/multipart';
-
+import { FastifyRequest } from 'fastify';
+import { FakeCloudService } from '../fake/fake-cloud.service';
 import {
   MIMETYPES_APPLICATION,
   MIMETYPES_IMAGE,
 } from '../utils/mimetypes.constant';
-import { FakeCloudService } from '../fake/fake-cloud.service';
 
 type Callback = (error: Error | null, acceptFile?: boolean) => void;
 
 @Controller('cloud-upload')
 /** sample for interceptor with undefined dest */
 export class CloudUploadController {
-  constructor(private readonly cloudService: FakeCloudService) {}
+  constructor(private readonly cloudService: FakeCloudService) { }
 
   @Post('file')
   @UseInterceptors(
@@ -42,7 +40,8 @@ export class CloudUploadController {
       ) => {
         const applicationMimeTypes: string[] = [...MIMETYPES_APPLICATION];
         if (applicationMimeTypes.includes(file.mimetype)) {
-          return cb(new BadRequestException('exception sample'));
+          const typesList = applicationMimeTypes.join(',');
+          return cb(new BadRequestException(`file extension not listed in (${typesList})`));
         }
         cb(null, true);
       },
@@ -70,7 +69,8 @@ export class CloudUploadController {
       ) => {
         const applicationMimeTypes: string[] = [...MIMETYPES_APPLICATION];
         if (applicationMimeTypes.includes(file.mimetype)) {
-          return cb(new BadRequestException('exception sample'));
+          const typesList = applicationMimeTypes.join(',');
+          return cb(new BadRequestException(`file extension not listed in (${typesList})`));
         }
         cb(null, true);
       },
@@ -122,13 +122,13 @@ export class CloudUploadController {
   ) {
     if (fileFields.profile) {
       await this.cloudService.batchUpload(
-        'upload/cloud/fields/profile',
+        'upload/cloud/fields',
         fileFields.profile,
       );
     }
     if (fileFields.avatar) {
       await this.cloudService.batchUpload(
-        'upload/cloud/fields/avatar',
+        'upload/cloud/fields',
         fileFields.avatar,
       );
     }

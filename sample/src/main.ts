@@ -10,7 +10,7 @@ async function bootstrap() {
     logger: true,
   });
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  fastifyAdapter.register(require('fastify-multipart'));
+  fastifyAdapter.register(require('@fastify/multipart'));
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
